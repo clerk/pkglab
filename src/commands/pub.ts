@@ -959,18 +959,14 @@ async function runRepoInstall(
   if (repo.pm === 'pnpm' && getIntegrityMap) {
     const integrityMap = await getIntegrityMap();
     if (integrityMap.size > 0) {
+      // Pre-compute fallback for transitive deps not directly tracked
+      const fallbackOldVersion = Object.values(repo.state.packages).find(p => p.current)?.current;
       patchEntries = [];
       for (const [name, integrity] of integrityMap) {
-        const oldVersion = repo.state.packages[name]?.current;
+        const oldVersion = repo.state.packages[name]?.current ?? fallbackOldVersion;
         const newVersion = repo.packages.find(p => p.name === name)?.version ?? repo.packages[0].version;
         if (oldVersion) {
           patchEntries.push({ name, oldVersion, newVersion, integrity });
-        } else {
-          // Transitive dep not directly tracked - use any tracked version as fallback
-          const anyOld = Object.values(repo.state.packages).find(p => p.current)?.current;
-          if (anyOld) {
-            patchEntries.push({ name, oldVersion: anyOld, newVersion, integrity });
-          }
         }
       }
     }

@@ -5,6 +5,8 @@
  * registry process can coordinate publishes for many workspaces.
  */
 
+const PUBLISH_TIMEOUT = parseInt(process.env.PKGLAB_PUB_TIMEOUT ?? '120000', 10);
+
 interface Lane {
   pending: Set<string>;
   root: boolean;
@@ -189,8 +191,6 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       if (names.length > 0 && !useRoot) {
         console.log(`  ${names.join(', ')}`);
       }
-
-      const PUBLISH_TIMEOUT = parseInt(process.env.PKGLAB_PUB_TIMEOUT ?? '120000', 10);
 
       const proc = Bun.spawn(cmd, {
         cwd: workspaceRoot,

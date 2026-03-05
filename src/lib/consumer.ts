@@ -226,7 +226,7 @@ export async function updatePackageJsonVersion(
     pkgJson.dependencies[pkgName] = version;
   }
 
-  await Bun.write(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  await atomicWrite(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
   return { previousVersion };
 }
 
@@ -238,7 +238,7 @@ export async function removePackageJsonDependency(repoPath: string, pkgName: str
       delete pkgJson[field][pkgName];
     }
   }
-  await Bun.write(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  await atomicWrite(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
 }
 
 /**
@@ -333,7 +333,6 @@ async function sanitizeBunLockfile(dir: string): Promise<void> {
   if (!LOCALHOST_URL_RE.test(content)) {
     return;
   }
-  LOCALHOST_URL_RE.lastIndex = 0;
   await Bun.write(lockPath, content.replace(LOCALHOST_URL_RE, '""'));
 }
 
@@ -577,7 +576,7 @@ async function updatePackageJsonCatalogVersion(
     }
   }
 
-  await Bun.write(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  await atomicWrite(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
   return { previousVersion };
 }
 
@@ -605,7 +604,7 @@ async function updatePnpmCatalogVersion(
     }
   }
 
-  await Bun.write(wsPath, stringify(ws));
+  await atomicWrite(wsPath, stringify(ws));
   return { previousVersion };
 }
 
@@ -633,7 +632,7 @@ export async function removeCatalogEntry(
         delete ws.catalogs[catalogName][pkgName];
       }
     }
-    await Bun.write(wsPath, stringify(ws));
+    await atomicWrite(wsPath, stringify(ws));
   } else {
     const pkgJsonPath = join(rootDir, 'package.json');
     const pkgJson = await Bun.file(pkgJsonPath).json();
@@ -646,7 +645,7 @@ export async function removeCatalogEntry(
         delete pkgJson.catalogs[catalogName][pkgName];
       }
     }
-    await Bun.write(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+    await atomicWrite(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
   }
 }
 
