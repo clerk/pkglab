@@ -47,5 +47,25 @@ heading('acquirePublishLock basics');
   await release();
 }
 
+heading('atomicWrite');
+{
+  const { atomicWrite } = await import('../src/lib/fs');
+  const { join } = await import('node:path');
+  const { mkdtemp, rm, readFile } = await import('node:fs/promises');
+  const tmpDir = await mkdtemp('/tmp/pkglab-test-atomic-');
+  const testPath = join(tmpDir, 'test.json');
+
+  await atomicWrite(testPath, '{"hello":"world"}\n');
+  const content = await readFile(testPath, 'utf8');
+  assert(content === '{"hello":"world"}\n', 'atomicWrite writes correct content');
+
+  // Verify no .tmp file left behind
+  const { readdirSync } = await import('node:fs');
+  const files = readdirSync(tmpDir);
+  assert(files.length === 1, `no temp files left behind (found ${files.join(', ')})`);
+
+  await rm(tmpDir, { recursive: true });
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

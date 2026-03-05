@@ -3,6 +3,7 @@ import { join, basename } from 'node:path';
 
 import type { RepoEntry, RepoState } from '../types';
 
+import { atomicWrite } from './fs';
 import { log } from './log';
 import { paths } from './paths';
 
@@ -45,7 +46,7 @@ export async function saveRepoByPath(repoPath: string, state: RepoState): Promis
   const canonical = await canonicalRepoPath(repoPath);
   const filename = repoFileName(canonical);
   const filePath = join(paths.reposDir, `${filename}.json`);
-  await Bun.write(filePath, JSON.stringify(state, null, 2) + '\n');
+  await atomicWrite(filePath, JSON.stringify(state, null, 2) + '\n');
 }
 
 export async function deleteRepoByPath(repoPath: string): Promise<void> {

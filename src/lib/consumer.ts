@@ -4,6 +4,7 @@ import type { PublishPlan, PublishEntry, RepoEntry, RepoState } from '../types';
 import type { PackageManager } from './pm-detect';
 
 import { NpmrcConflictError } from './errors';
+import { atomicWrite } from './fs';
 import { patchPnpmLockfile } from './lockfile-patch';
 import { log } from './log';
 import { detectPackageManager } from './pm-detect';
@@ -39,7 +40,7 @@ export async function addRegistryToNpmrc(repoPath: string, port: number): Promis
 
   const block = `${MARKER_START}\nregistry=http://127.0.0.1:${port}\n${MARKER_END}`;
   content = content.trimEnd() + '\n' + block + '\n';
-  await Bun.write(npmrcPath, content);
+  await atomicWrite(npmrcPath, content);
 
   return { isFirstTime };
 }

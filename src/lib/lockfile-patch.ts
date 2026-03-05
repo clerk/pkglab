@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 
+import { atomicWrite } from './fs';
 import { log } from './log';
 import { run } from './proc';
 
@@ -112,7 +113,7 @@ export async function patchPnpmLockfile(
   }
 
   // Write the patched lockfile
-  await Bun.write(lockfilePath, patched);
+  await atomicWrite(lockfilePath, patched);
 
   // Run pnpm install with frozen lockfile to apply without resolution
   const result = await run(
@@ -130,7 +131,7 @@ export async function patchPnpmLockfile(
     log.dim(`lockfile patch: ${errOutput.slice(0, 500)}`);
   }
   log.dim(`lockfile patch: frozen install failed (exit ${result.exitCode}), restoring original`);
-  await Bun.write(lockfilePath, original);
+  await atomicWrite(lockfilePath, original);
   return false;
 }
 

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import type { FileStat, PackageFingerprint } from './fingerprint';
+import { atomicWrite } from './fs';
 import { paths } from './paths';
 
 interface FingerprintEntry {
@@ -98,7 +99,7 @@ export async function saveFingerprintState(
     };
   }
 
-  await Bun.write(FINGERPRINT_PATH, JSON.stringify(data, null, 2) + '\n');
+  await atomicWrite(FINGERPRINT_PATH, JSON.stringify(data, null, 2) + '\n');
 }
 
 export async function clearFingerprintState(): Promise<void> {
