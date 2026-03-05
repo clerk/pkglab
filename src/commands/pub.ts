@@ -51,7 +51,7 @@ interface CascadeResult {
   activeRepos: Awaited<ReturnType<typeof getActiveRepos>>;
 }
 
-function detectChanges(
+export function detectChanges(
   cascadePackages: WorkspacePackage[],
   fingerprints: Map<string, PackageFingerprint>,
   previousState: Record<string, { hash: string; version: string }>,
