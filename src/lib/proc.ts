@@ -17,6 +17,7 @@ export interface RunResult {
 export interface RunOptions {
   cwd?: string;
   env?: Record<string, string | undefined>;
+  timeout?: number;
 }
 
 export async function run(cmd: string[], options: RunOptions = {}): Promise<RunResult> {
@@ -27,12 +28,26 @@ export async function run(cmd: string[], options: RunOptions = {}): Promise<RunR
     stderr: 'pipe',
   });
 
+  let killed = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  if (options.timeout) {
+    timer = setTimeout(() => {
+      killed = true;
+      proc.kill();
+    }, options.timeout);
+  }
+
   // Drain pipes concurrently with waiting for exit to avoid deadlocks
   const [exitCode, stdout, stderr] = await Promise.all([
     proc.exited,
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
   ]);
+
+  if (timer) clearTimeout(timer);
+  if (killed) {
+    throw new Error(`Command timed out after ${options.timeout}ms: ${cmd.join(' ')}`);
+  }
 
   return { stdout, stderr, exitCode };
 }
@@ -106,7 +121,7 @@ export async function gracefulStop(pid: number): Promise<void> {
 
 export async function validatePidStartTime(pid: number, startedAt: number): Promise<boolean> {
   try {
-    const result = await run(['ps', '-p', String(pid), '-o', 'lstart='], {});
+    const result = await run(['ps', '-p', String(pid), '-o', 'lstart='], { timeout: 5000 });
     if (result.exitCode !== 0) {
       return false;
     }
