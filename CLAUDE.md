@@ -64,7 +64,7 @@ For multi-worktree workflows, use tags to isolate version channels:
 - `src/lib/` - shared utilities (config, daemon, publisher, registry, fingerprint, publish-queue, publish-ping, etc.)
 - `src/types.ts` — all shared interfaces
 
-Config and state live in `~/.pkglab/`. Registry storage at `~/.pkglab/registry/storage/`. Fingerprint state at `~/.pkglab/fingerprints.json`.
+Config and state live in `~/.pkglab/`. Registry storage at `~/.pkglab/registry/storage/`. Fingerprint state at `~/.pkglab/fingerprints/` (per-workspace files).
 
 ## Conventions
 
@@ -96,7 +96,7 @@ Fingerprinting: each package in scope is fingerprinted using `Bun.Glob` + `Bun.C
 
 Phase 2 (dependent expansion): for each package classified as "changed," expand its transitive dependents into the scope. Expanding from "propagated" is skipped because every dependent of a propagated package is already a transitive dependent of the original changed package. New packages are fingerprinted and classified, and the loop repeats until no new changed packages are found. This ensures that if a dependency (like `@clerk/shared`) changes, all its dependents (like `@clerk/express`) are included even if they weren't in the original targets.
 
-Fingerprint state is stored per workspace, per package, per tag in `~/.pkglab/fingerprints.json`. Treated as a cache: missing/corrupt state triggers a full republish. State is saved after consumer updates succeed.
+Fingerprint state is stored per workspace in separate files under `~/.pkglab/fingerprints/`, keyed by a SHA-256 hash of the workspace root path (e.g. `~/.pkglab/fingerprints/a1b2c3d4e5f6.json`). Each file contains per-package, per-tag entries. This eliminates cross-workspace race conditions when multiple workspaces publish concurrently. On first load, data is auto-migrated from the old monolithic `~/.pkglab/fingerprints.json` if present. Treated as a cache: missing/corrupt state triggers a full republish. State is saved after consumer updates succeed.
 
 The cascade has three steps: (1) DOWN: pull in transitive deps of targets so `workspace:^` references resolve, (2) UP: expand dependents from packages whose content actually changed, (3) PUBLISH filter: only publish dependents that a consumer has installed via `pkglab add`. No active repos means nothing is consumed, so the filter removes all dependents.
 

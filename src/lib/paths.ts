@@ -13,6 +13,7 @@ export const paths = {
   registryDir: join(pkglab_HOME, 'registry'),
   registryStorage: join(pkglab_HOME, 'registry', 'storage'),
   listenersDir: join(pkglab_HOME, 'listeners'),
+  fingerprintsDir: join(pkglab_HOME, 'fingerprints'),
   daemonLock: join(pkglab_HOME, 'daemon.lock'),
   listenerLock: join(pkglab_HOME, 'listener.lock'),
   logFile: join(pkglab_LOG_DIR, 'registry.log'),
