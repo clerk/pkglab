@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { exists } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { RepoEntry, RepoState } from '../../types';
+import type { RepoEntry } from '../../types';
 
 import { removeRegistryFromNpmrc, removePreCommitHook, removeSkipWorktree, restorePackage } from '../../lib/consumer';
 import { log } from '../../lib/log';

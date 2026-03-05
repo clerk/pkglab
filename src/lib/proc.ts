@@ -130,11 +130,5 @@ export async function validatePidStartTime(pid: number, startedAt: number): Prom
     }
   } catch {}
 
-  // Linux fallback: if /proc exists, the process is alive (already confirmed by caller)
-  try {
-    const procFile = Bun.file(`/proc/${pid}/stat`);
-    if (await procFile.exists()) return true;
-  } catch {}
-
   return false;
 }

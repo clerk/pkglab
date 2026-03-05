@@ -367,7 +367,12 @@ async function batchInstallPackages(
       if (catalogFormat) {
         repoState.packages[pkg.name].catalogFormat = catalogFormat;
       }
-      repoState.packages[pkg.name].targets = targets;
+      // Merge targets: preserve existing original values (the real pre-pkglab versions)
+      const existingTargets = repoState.packages[pkg.name].targets;
+      repoState.packages[pkg.name].targets = targets.map(t => {
+        const prev = existingTargets.find(e => e.dir === t.dir);
+        return prev && prev.original ? { ...t, original: prev.original } : t;
+      });
     }
   }
 

@@ -54,14 +54,14 @@ export async function removeRegistryFromNpmrc(repoPath: string): Promise<void> {
 
   let content = await file.text();
   content = removepkglabBlock(content);
-  await Bun.write(npmrcPath, content);
+  await atomicWrite(npmrcPath, content);
 }
 
 export function removepkglabBlock(content: string): string {
   let result = content;
   while (true) {
     const startIdx = result.indexOf(MARKER_START);
-    const endIdx = result.indexOf(MARKER_END);
+    const endIdx = result.indexOf(MARKER_END, startIdx + MARKER_START.length);
     if (startIdx === -1 || endIdx === -1) break;
     const before = result.slice(0, startIdx);
     const after = result.slice(endIdx + MARKER_END.length);
@@ -210,7 +210,7 @@ export async function updatePackageJsonVersion(
 
   let previousVersion: string | null = null;
   let found = false;
-  for (const field of ['dependencies', 'devDependencies']) {
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
     if (pkgJson[field]?.[pkgName]) {
       previousVersion = pkgJson[field][pkgName];
       pkgJson[field][pkgName] = version;
@@ -233,7 +233,7 @@ export async function updatePackageJsonVersion(
 export async function removePackageJsonDependency(repoPath: string, pkgName: string): Promise<void> {
   const pkgJsonPath = join(repoPath, 'package.json');
   const pkgJson = await Bun.file(pkgJsonPath).json();
-  for (const field of ['dependencies', 'devDependencies']) {
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
     if (pkgJson[field]?.[pkgName]) {
       delete pkgJson[field][pkgName];
     }

@@ -8,6 +8,7 @@ import { log } from '../lib/log';
 import { detectPackageManager, runInstall } from '../lib/pm-detect';
 import { canonicalRepoPath, findRepoByPath, saveRepoByPath } from '../lib/repo-state';
 import { extractTag } from '../lib/version';
+import { discoverWorkspace } from '../lib/workspace';
 
 export default defineCommand({
   meta: {
@@ -39,7 +40,16 @@ export default defineCommand({
     }
 
     const repoPath = await canonicalRepoPath(process.cwd());
-    const repo = await findRepoByPath(repoPath);
+    let repo = await findRepoByPath(repoPath);
+
+    // Fallback: cwd might be a subdirectory, try workspace root
+    if (!repo) {
+      const ws = await discoverWorkspace(process.cwd());
+      if (ws.root !== repoPath) {
+        const wsPath = await canonicalRepoPath(ws.root);
+        repo = await findRepoByPath(wsPath);
+      }
+    }
 
     if (!repo || Object.keys(repo.state.packages).length === 0) {
       log.warn('No pkglab packages in this repo');
@@ -144,9 +154,9 @@ export default defineCommand({
 
       // Clean up .npmrc and pre-commit hook if no packages remain
       if (Object.keys(repo.state.packages).length === 0) {
-        await removeRegistryFromNpmrc(repoPath);
-        await removeSkipWorktree(repoPath);
-        await removePreCommitHook(repoPath);
+        await removeRegistryFromNpmrc(repo.state.path);
+        await removeSkipWorktree(repo.state.path);
+        await removePreCommitHook(repo.state.path);
         log.info('All pkglab packages removed, .npmrc restored');
       }
 

@@ -1,7 +1,8 @@
-import { unlink } from 'node:fs/promises';
+import { readdir, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { ensureDaemonRunning } from './daemon';
-import { getListenerSocketPath, getListenerPidPath, isListenerRunning } from './listener-ipc';
+import { getListenerSocketPath, getListenerPidPath, getListenerLockPath, isListenerRunning } from './listener-ipc';
 import { log } from './log';
 import { isProcessAlive, waitForReady, waitForExit, timeout, gracefulStop, validatePidStartTime } from './proc';
 
@@ -68,6 +69,20 @@ export async function startListenerDaemon(workspaceRoot: string): Promise<Listen
     stderr: 'pipe',
   });
 
+  // Drain stderr concurrently to prevent pipe buffer deadlock.
+  const stderrReader = proc.stderr.getReader();
+  const stderrChunks: Uint8Array[] = [];
+  const stderrPromise = (async () => {
+    try {
+      while (true) {
+        const { done, value } = await stderrReader.read();
+        if (done) break;
+        stderrChunks.push(value);
+      }
+    } catch {}
+    return Buffer.concat(stderrChunks).toString();
+  })();
+
   // Wait for READY signal, process exit, or timeout
   const deadline = timeout(5000);
   const result = await Promise.race([waitForReady(proc), waitForExit(proc), deadline.promise]);
@@ -78,10 +93,12 @@ export async function startListenerDaemon(workspaceRoot: string): Promise<Listen
     if (result === 'timeout') {
       throw new Error('Listener failed to start within 5 seconds');
     }
-    const stderr = await new Response(proc.stderr).text();
+    const stderr = await stderrPromise;
     throw new Error(`Listener process exited unexpectedly: ${stderr}`);
   }
 
+  // Cancel stderr drain so the parent can exit while the listener runs
+  await stderrReader.cancel();
   proc.unref();
 
   const status = await getListenerDaemonStatus(workspaceRoot);
@@ -95,9 +112,9 @@ export async function ensureListenerRunning(workspaceRoot: string): Promise<void
   }
 
   const { openExclusive, writeAndClose, isLockStale } = await import('./lock');
-  const { paths } = await import('./paths');
 
-  const fd = await openExclusive(paths.listenerLock);
+  const lockPath = getListenerLockPath(workspaceRoot);
+  const fd = await openExclusive(lockPath);
   if (fd) {
     try {
       await writeAndClose(fd, String(process.pid));
@@ -111,7 +128,7 @@ export async function ensureListenerRunning(workspaceRoot: string): Promise<void
       const info = await startListenerDaemon(workspaceRoot);
       log.success(`Listener running (PID ${info.pid})`);
     } finally {
-      await unlink(paths.listenerLock).catch(() => {});
+      await unlink(lockPath).catch(() => {});
     }
   } else {
     // Another process is starting the listener. Wait for it.
@@ -121,8 +138,8 @@ export async function ensureListenerRunning(workspaceRoot: string): Promise<void
     while (Date.now() - start < maxWait) {
       await Bun.sleep(delay);
       if (await isListenerRunning(socketPath)) return;
-      if (await isLockStale(paths.listenerLock)) {
-        await unlink(paths.listenerLock).catch(() => {});
+      if (await isLockStale(lockPath)) {
+        await unlink(lockPath).catch(() => {});
         return ensureListenerRunning(workspaceRoot);
       }
       delay = Math.min(delay * 2, 500);
@@ -143,4 +160,28 @@ export async function stopListener(workspaceRoot: string): Promise<void> {
   const socketPath = getListenerSocketPath(workspaceRoot);
   await unlink(pidPath).catch(() => {});
   await unlink(socketPath).catch(() => {});
+}
+
+export async function stopAllListeners(): Promise<number> {
+  const { paths } = await import('./paths');
+  let stopped = 0;
+  try {
+    const files = await readdir(paths.listenersDir);
+    const pidFiles = files.filter(f => f.endsWith('.pid'));
+    for (const pidFile of pidFiles) {
+      try {
+        const pidPath = join(paths.listenersDir, pidFile);
+        const data = JSON.parse(await Bun.file(pidPath).text());
+        if (data.pid && isProcessAlive(data.pid)) {
+          await gracefulStop(data.pid);
+          stopped++;
+        }
+        await unlink(pidPath).catch(() => {});
+        // Clean up corresponding socket
+        const socketPath = pidPath.replace(/\.pid$/, '.sock');
+        await unlink(socketPath).catch(() => {});
+      } catch {}
+    }
+  } catch {}
+  return stopped;
 }

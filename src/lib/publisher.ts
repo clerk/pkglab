@@ -46,29 +46,51 @@ export interface PublishOptions {
   onPackagePublished?: (entry: PublishEntry) => void;
 }
 
+// Bounded-concurrency alternative to Promise.allSettled(items.map(...))
+// Prevents exhausting file descriptors in large workspaces
+async function mapSettled<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const results: PromiseSettledResult<R>[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i], i) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
 export async function executePublish(
   plan: PublishPlan,
   config: pkglabConfig,
   options: PublishOptions = {},
 ): Promise<void> {
   const url = registryUrl(config);
+  const concurrency = parseInt(process.env.PKGLAB_PUBLISH_CONCURRENCY ?? '8', 10);
 
-  const results = await Promise.allSettled(
-    plan.packages.map(async (entry, index) => {
-      if (options.verbose) {
-        log.info(`Publishing ${entry.name}@${entry.version}`);
-      }
-      try {
-        await publishSinglePackage(entry, url, plan.catalogs);
-        options.onPublished?.(index);
-        options.onPackagePublished?.(entry);
-        return `${entry.name}@${entry.version}`;
-      } catch (error) {
-        options.onFailed?.(index);
-        throw error;
-      }
-    }),
-  );
+  const results = await mapSettled(plan.packages, concurrency, async (entry, index) => {
+    if (options.verbose) {
+      log.info(`Publishing ${entry.name}@${entry.version}`);
+    }
+    try {
+      await publishSinglePackage(entry, url, plan.catalogs);
+      options.onPublished?.(index);
+      options.onPackagePublished?.(entry);
+      return `${entry.name}@${entry.version}`;
+    } catch (error) {
+      options.onFailed?.(index);
+      throw error;
+    }
+  });
 
   const failed: string[] = [];
   let firstError: Error | undefined;

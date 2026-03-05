@@ -679,6 +679,8 @@ async function publishPackages(
           plan.packages.map(e => ({ name: e.name, version: e.version })),
         );
 
+  const successfulEntries: PublishEntry[] = [];
+
   try {
     const publishStart = performance.now();
 
@@ -712,6 +714,7 @@ async function publishPackages(
           verbose: true,
           onPackagePublished(entry: PublishEntry) {
             publishedPackages.add(entry.name);
+            successfulEntries.push(entry);
             for (const repo of pendingRepos) {
               const required = requiredSets.get(repo);
               if (!required) {
@@ -799,6 +802,7 @@ async function publishPackages(
             onFailed: i => spinner.fail(i),
             onPackagePublished(entry: PublishEntry) {
               publishedPackages.add(entry.name);
+              successfulEntries.push(entry);
               for (const repo of pendingRepos) {
                 const required = requiredSets.get(repo);
                 if (!required) {
@@ -876,10 +880,6 @@ async function publishPackages(
       }
     }
 
-    // Set npm dist-tags so `npm install pkg@tag` works against the local registry
-    const distTag = tag ?? 'pkglab';
-    await Promise.all(plan.packages.map(e => setDistTag(config, e.name, e.version, distTag)));
-
     const elapsed = ((performance.now() - publishStart) / 1000).toFixed(2);
     log.success(`Published ${plan.packages.length} packages in ${elapsed}s`);
 
@@ -907,6 +907,14 @@ async function publishPackages(
 
     return { publishMs, consumerMs };
   } finally {
+    // Set dist-tags for successfully published packages even on partial failure,
+    // so `pkglab add pkg@tag` works for packages that did publish
+    if (successfulEntries.length > 0) {
+      const distTag = tag ?? 'pkglab';
+      await Promise.all(successfulEntries.map(e => setDistTag(config, e.name, e.version, distTag))).catch(err => {
+        log.warn(`Failed to set dist-tags: ${err instanceof Error ? err.message : String(err)}`);
+      });
+    }
     await releaseLock();
   }
 }
@@ -986,7 +994,10 @@ async function runRepoInstall(
     });
 
     for (const entry of repo.packages) {
-      repo.state.packages[entry.name].current = entry.version;
+      const link = repo.state.packages[entry.name];
+      if (link) {
+        link.current = entry.version;
+      }
     }
     await saveRepoByPath(repo.state.path, repo.state);
   } catch (err) {

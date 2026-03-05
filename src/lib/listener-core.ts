@@ -227,6 +227,7 @@ export function createListener(opts: {
         }
       },
       error(_socket, error) {
+        socketBuffers.delete(_socket);
         if (verbose) {
           logger.error(formatTimestamp() + ' Socket error: ' + error.message);
         }

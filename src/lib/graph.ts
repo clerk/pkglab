@@ -199,20 +199,28 @@ export function deterministicToposort(graph: DepGraph<WorkspacePackage>, subset:
     }
   }
 
-  // Kahn's algorithm with lexical tie-breaking
+  // Kahn's algorithm with lexical tie-breaking.
+  // Uses index-based consumption to avoid O(n) Array.shift() on each iteration.
   const queue = [...subset].filter(n => inDegree.get(n) === 0).toSorted();
   const result: string[] = [];
+  let head = 0;
 
-  while (queue.length > 0) {
-    const node = queue.shift()!;
+  while (head < queue.length) {
+    const node = queue[head++];
     result.push(node);
 
     for (const dependent of (adjList.get(node) || []).toSorted()) {
       const newDeg = (inDegree.get(dependent) || 1) - 1;
       inDegree.set(dependent, newDeg);
       if (newDeg === 0) {
-        // Insert in sorted position
-        const idx = queue.findIndex(n => n > dependent);
+        // Insert in sorted position within the unconsumed portion of the queue
+        let idx = -1;
+        for (let i = head; i < queue.length; i++) {
+          if (queue[i] > dependent) {
+            idx = i;
+            break;
+          }
+        }
         if (idx === -1) {
           queue.push(dependent);
         } else {

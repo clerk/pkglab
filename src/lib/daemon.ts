@@ -25,6 +25,8 @@ export async function startDaemon(): Promise<DaemonInfo> {
 
   // In compiled mode, process.argv[1] is a subcommand (e.g. "up").
   // In source mode, process.argv[1] is the script path (e.g. "src/index.ts").
+  const startedAt = Date.now();
+
   const isSource = process.argv[1]?.match(/\.(ts|js)$/);
   const cmd = isSource ? [process.execPath, process.argv[1], '--__worker'] : [process.execPath, '--__worker'];
 
@@ -69,7 +71,7 @@ export async function startDaemon(): Promise<DaemonInfo> {
   await stderrReader.cancel();
 
   // Write PID only after confirmed READY
-  await Bun.write(paths.pid, JSON.stringify({ pid: proc.pid, port: config.port, startedAt: Date.now() }));
+  await Bun.write(paths.pid, JSON.stringify({ pid: proc.pid, port: config.port, startedAt }));
   proc.unref();
 
   return { pid: proc.pid, port: config.port, running: true };

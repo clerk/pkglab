@@ -103,6 +103,11 @@ export function getListenerPidPath(workspaceRoot: string): string {
   return getListenerSocketPath(workspaceRoot).replace(/\.sock$/, '.pid');
 }
 
+export function getListenerLockPath(workspaceRoot: string): string {
+  const hash = new Bun.CryptoHasher('sha256').update(workspaceRoot).digest('hex').slice(0, 12);
+  return join(paths.listenersDir, `${hash}.lock`);
+}
+
 export function getListenerLogPath(workspaceRoot: string): string {
   const hash = new Bun.CryptoHasher('sha256').update(workspaceRoot).digest('hex').slice(0, 12);
   return join('/tmp/pkglab', `listener-${hash}.log`);
