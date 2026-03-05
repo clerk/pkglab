@@ -113,7 +113,7 @@ export async function runCascade(
   // Maps dependent name to the package that triggered its inclusion
   const expandedFrom = new Map<string, string>();
   // All skipped dependents across iterations (name + which package triggered them)
-  let allSkippedDependents: { name: string; via: string }[] = [];
+  const allSkippedDependents: { name: string; via: string }[] = [];
 
   // Load previous fingerprint state (--force uses empty state to republish all)
   const previousState = opts.force ? {} : await loadFingerprintState(workspace.root, tag ?? null);
@@ -189,7 +189,7 @@ export async function runCascade(
 
     // Collect skipped dependents
     if (expansion.skippedDependents.length > 0) {
-      allSkippedDependents = allSkippedDependents.concat(expansion.skippedDependents);
+      allSkippedDependents.push(...expansion.skippedDependents);
     }
 
     if (expansion.newPackages.length === 0) {
@@ -214,7 +214,7 @@ export async function runCascade(
 
   // Deduplicate skipped dependents
   const seenSkipped = new Set<string>();
-  allSkippedDependents = allSkippedDependents
+  const dedupedSkippedDependents = allSkippedDependents
     .filter(d => {
       if (scope.has(d.name) || seenSkipped.has(d.name)) {
         return false;
@@ -286,7 +286,7 @@ export async function runCascade(
     targetSet,
     expandedFrom,
     initialScope,
-    allSkippedDependents,
+    allSkippedDependents: dedupedSkippedDependents,
     activeRepos,
   };
 }

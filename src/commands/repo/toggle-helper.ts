@@ -11,28 +11,19 @@ import {
 } from '../../lib/repo-state';
 
 interface ToggleOptions {
-  /** "activate" or "deactivate" */
   verb: string;
-  /** Past tense for success messages, e.g. "Activated" */
   pastTense: string;
-  /** Filter predicate: which repos to skip in --all mode (already in desired state) */
   shouldSkip: (state: RepoState) => boolean;
-  /** Filter for interactive picker: which repos to show */
   pickerFilter: (state: RepoState) => boolean;
-  /** Message when all repos already match desired state */
   allDoneMessage: string;
-  /** Message for empty interactive picker */
   pickerEmptyMessage: string;
-  /** Apply the state change to a single repo */
   apply: (state: RepoState) => Promise<void>;
 }
 
 export async function runToggle(
-  args: { name?: string; all?: boolean; _?: string[] },
+  args: { name?: string; all?: boolean },
   opts: ToggleOptions,
 ) {
-  const pathArg = args.name as string | undefined;
-
   const applyAndLog = async (state: RepoState) => {
     await opts.apply(state);
     const displayName = await getRepoDisplayName(state.path);
@@ -73,8 +64,8 @@ export async function runToggle(
 
   // Positional args: toggle specific repos by path
   const paths = getPositionalArgs(args);
-  if (pathArg) {
-    paths.unshift(pathArg);
+  if (args.name) {
+    paths.unshift(args.name);
   }
 
   if (paths.length > 0) {

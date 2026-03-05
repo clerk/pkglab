@@ -33,7 +33,7 @@ if (process.argv.includes('--__listener')) {
   await new Promise(() => {});
 }
 
-import { defineCommand, runCommand } from 'citty';
+import { defineCommand, runMain } from 'citty';
 
 import { ensurepkglabDirs } from './lib/config';
 import { CommandError, SilentExitError, pkglabError } from './lib/errors';
@@ -73,27 +73,10 @@ const cmd = defineCommand({
   },
 });
 
+// runMain handles --help (including nested subcommands), --version, and CLIError natively.
+// We wrap it to catch our own error classes thrown from command handlers.
 try {
-  const rawArgs = process.argv.slice(2);
-  if (rawArgs.includes('--help') || rawArgs.includes('-h')) {
-    // Resolve the target command for help (handles subcommands like `pkglab pub --help`)
-    const { showUsage } = await import('citty');
-    let target = cmd;
-    const subCommands = cmd.subCommands as Record<string, () => Promise<{ default: typeof cmd }>> | undefined;
-    if (subCommands) {
-      const subName = rawArgs.find(arg => !arg.startsWith('-'));
-      if (subName && subCommands[subName]) {
-        const mod = await subCommands[subName]();
-        target = 'default' in mod ? (mod as { default: typeof cmd }).default : mod;
-      }
-    }
-    await showUsage(target);
-    process.exit(0);
-  } else if (rawArgs.length === 1 && rawArgs[0] === '--version') {
-    console.log(pkgVersion);
-  } else {
-    await runCommand(cmd, { rawArgs });
-  }
+  await runMain(cmd);
 } catch (error) {
   if (error instanceof SilentExitError) {
     process.exit(error.exitCode);
@@ -102,7 +85,7 @@ try {
     if (!error.logged) {
       log.error(error.message);
     }
-    process.exit(error.exitCode);
+    process.exit(1);
   }
   if (error instanceof pkglabError) {
     log.error(error.message);

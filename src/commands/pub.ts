@@ -99,7 +99,6 @@ function printScopeSummary(cascade: CascadeResult): void {
     reason,
     targetSet,
     expandedFrom,
-    initialScope,
     allSkippedDependents,
     activeRepos,
   } = cascade;
@@ -124,8 +123,6 @@ function printScopeSummary(cascade: CascadeResult): void {
       scopeReason = 'target';
     } else if (expandedFrom.has(pkg.name)) {
       scopeReason = `dependent (via ${expandedFrom.get(pkg.name)})`;
-    } else if (initialScope.has(pkg.name)) {
-      scopeReason = 'dependency';
     } else {
       scopeReason = 'dependency';
     }

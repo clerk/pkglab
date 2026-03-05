@@ -1,6 +1,8 @@
 // Syncs the root package.json version into all npm platform package.json files.
 // Run after `changeset version` bumps the root version.
 
+import { PLATFORMS } from './platforms';
+
 const ROOT = import.meta.dir + '/..';
 
 const rootPkg = await Bun.file(`${ROOT}/package.json`).json();
@@ -8,10 +10,8 @@ const version = rootPkg.version;
 
 console.log(`Syncing version ${version} to npm packages...`);
 
-import { PLATFORMS as platforms } from './platforms';
-
 // Update platform packages
-for (const platform of platforms) {
+for (const platform of PLATFORMS) {
   const path = `${ROOT}/npm/${platform}/package.json`;
   const pkg = await Bun.file(path).json();
   pkg.version = version;

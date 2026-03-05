@@ -24,16 +24,13 @@ export default defineCommand({
       if (!status?.running) {
         throw new SilentExitError(1);
       }
-      try {
-        const resp = await fetch(`http://127.0.0.1:${config.port}/-/ping`);
-        if (!resp.ok) {
-          throw new SilentExitError(1);
-        }
-      } catch (err) {
-        if (err instanceof SilentExitError) throw err;
+      const healthy = await fetch(`http://127.0.0.1:${config.port}/-/ping`)
+        .then(r => r.ok)
+        .catch(() => false);
+      if (!healthy) {
         throw new SilentExitError(1);
       }
-      throw new SilentExitError(0);
+      return;
     }
 
     if (status?.running) {

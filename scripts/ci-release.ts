@@ -2,6 +2,7 @@
 // and creates a git tag.
 
 import { mkdirSync } from 'node:fs';
+import { PLATFORMS } from './platforms';
 
 const ROOT = import.meta.dir + '/..';
 
@@ -22,12 +23,10 @@ if (checkOutput === version) {
   process.exit(0);
 }
 
-import { PLATFORMS as platforms } from './platforms';
-
 // Copy repo README into main package, write redirect READMEs for platform packages
 const repoReadme = await Bun.file(`${ROOT}/README.md`).text();
 await Bun.write(`${ROOT}/npm/pkglab/README.md`, repoReadme);
-for (const platform of platforms) {
+for (const platform of PLATFORMS) {
   await Bun.write(
     `${ROOT}/npm/${platform}/README.md`,
     `# pkglab-${platform}\n\nPlatform binary for [pkglab](https://www.npmjs.com/package/pkglab). See the main package for documentation.\n`,
@@ -36,7 +35,7 @@ for (const platform of platforms) {
 
 // Cross-compile binaries
 console.log('\nBuilding binaries...');
-for (const platform of platforms) {
+for (const platform of PLATFORMS) {
   mkdirSync(`${ROOT}/npm/${platform}/bin`, { recursive: true });
   const proc = Bun.spawn(
     [
@@ -63,7 +62,7 @@ for (const platform of platforms) {
 // Publish platform packages in parallel
 console.log('\nPublishing platform packages...');
 const platformResults = await Promise.all(
-  platforms.map(async platform => {
+  PLATFORMS.map(async platform => {
     console.log(`  Publishing pkglab-${platform}@${version}...`);
     const proc = Bun.spawn(['npm', 'publish', `${ROOT}/npm/${platform}/`, '--access', 'public'], {
       stdout: 'inherit',

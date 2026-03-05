@@ -25,8 +25,7 @@ import { getDistTags, listPackageNames } from '../lib/registry';
 import { canonicalRepoPath, loadRepoByPath, saveRepoByPath } from '../lib/repo-state';
 import { prefetchUpdateCheck } from '../lib/update-check';
 import { sanitizeTag, ispkglabVersion, extractTag } from '../lib/version';
-import { collectWorkspacePackageJsons, discoverWorkspace } from '../lib/workspace';
-import type { WorkspaceDiscovery } from '../lib/workspace';
+import { collectWorkspacePackageJsons, discoverWorkspace, type WorkspaceDiscovery } from '../lib/workspace';
 
 function parsePackageArg(input: string): { name: string; tag?: string } {
   const lastAt = input.lastIndexOf('@');
