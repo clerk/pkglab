@@ -1,4 +1,4 @@
-import { mkdir, readdir, rename, rm, unlink } from 'node:fs/promises';
+import { mkdir, readdir, rename, rm, rmdir, unlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 
 import { log } from './log';
@@ -199,12 +199,9 @@ class VerbunccioStorage {
     if (name.startsWith('@')) {
       const scopeDir = dirname(dir);
       try {
-        const remaining = await readdir(scopeDir);
-        if (remaining.length === 0) {
-          await rm(scopeDir, { recursive: true, force: true });
-        }
+        await rmdir(scopeDir);
       } catch {
-        // ignore
+        // ENOTEMPTY or already gone, both fine
       }
     }
 

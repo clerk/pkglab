@@ -190,13 +190,22 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
         console.log(`  ${names.join(', ')}`);
       }
 
+      const PUBLISH_TIMEOUT = parseInt(process.env.PKGLAB_PUB_TIMEOUT ?? '120000', 10);
+
       const proc = Bun.spawn(cmd, {
         cwd: workspaceRoot,
         stdout: logFd ?? 'inherit',
         stderr: logFd ?? 'inherit',
       });
 
+      const timer = setTimeout(() => {
+        console.error(`${formatTimestamp()} Publish timed out after ${PUBLISH_TIMEOUT}ms, killing...`);
+        proc.kill();
+        setTimeout(() => { try { proc.kill(9); } catch {} }, 5000);
+      }, PUBLISH_TIMEOUT);
+
       const exitCode = await proc.exited;
+      clearTimeout(timer);
       if (exitCode !== 0) {
         console.error(`${formatTimestamp()} Publish failed (exit ${exitCode})`);
       } else {

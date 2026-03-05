@@ -222,5 +222,11 @@ export function deterministicToposort(graph: DepGraph<WorkspacePackage>, subset:
     }
   }
 
+  // Append any nodes stuck in cycles (never reached in-degree 0)
+  if (result.length < subset.size) {
+    const missing = [...subset].filter(n => !result.includes(n));
+    result.push(...missing.toSorted());
+  }
+
   return result;
 }

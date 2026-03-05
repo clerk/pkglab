@@ -109,7 +109,7 @@ async function scanPackageJson(dir: string, label: string): Promise<number> {
   const prefix = label ? `${label}/` : '';
   const pkgJson = await pkgFile.json();
 
-  for (const field of ['dependencies', 'devDependencies']) {
+  for (const field of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']) {
     if (!pkgJson[field]) {
       continue;
     }

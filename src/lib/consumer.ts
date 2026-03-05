@@ -58,15 +58,16 @@ export async function removeRegistryFromNpmrc(repoPath: string): Promise<void> {
 }
 
 export function removepkglabBlock(content: string): string {
-  const startIdx = content.indexOf(MARKER_START);
-  const endIdx = content.indexOf(MARKER_END);
-  if (startIdx === -1 || endIdx === -1) {
-    return content;
+  let result = content;
+  while (true) {
+    const startIdx = result.indexOf(MARKER_START);
+    const endIdx = result.indexOf(MARKER_END);
+    if (startIdx === -1 || endIdx === -1) break;
+    const before = result.slice(0, startIdx);
+    const after = result.slice(endIdx + MARKER_END.length);
+    result = before + after;
   }
-
-  const before = content.slice(0, startIdx);
-  const after = content.slice(endIdx + MARKER_END.length);
-  return (before + after).replace(/\n{3,}/g, '\n\n').trim() + '\n';
+  return result.replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
 
 export async function removeSkipWorktree(repoPath: string): Promise<void> {

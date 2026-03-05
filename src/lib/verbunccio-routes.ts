@@ -95,6 +95,7 @@ async function handlePublish(
     }
 
     // Save tarballs from attachments (inside lock, after duplicate check)
+    const savedTarballs: string[] = [];
     for (const [attachmentName, meta] of Object.entries(attachments)) {
       // npm sends scoped attachment names like "@scope/pkg-1.0.0.tgz",
       // extract the basename for safe disk storage
@@ -108,6 +109,7 @@ async function handlePublish(
         return jsonResponse(400, { error: 'bad_request', reason: 'empty attachment data' });
       }
       await storage.saveTarball(pkgName, safeFilename, buffer);
+      savedTarballs.push(safeFilename);
     }
 
     const doc = existing
@@ -149,7 +151,15 @@ async function handlePublish(
     // Strip _attachments from the doc before saving
     delete doc._attachments;
 
-    await storage.savePackument(pkgName, doc);
+    try {
+      await storage.savePackument(pkgName, doc);
+    } catch (err) {
+      // Roll back saved tarballs on packument save failure
+      for (const filename of savedTarballs) {
+        await storage.deleteTarball(pkgName, filename);
+      }
+      throw err;
+    }
 
     return jsonResponse(201, { ok: true, id: pkgName, rev: newRev });
   });

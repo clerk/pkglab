@@ -159,5 +159,32 @@ heading('regex /g lastIndex bug');
   assert(secondWithReset === true, 'second .test() after lastIndex reset finds the match (the fix)');
 }
 
+heading('removepkglabBlock multiple markers');
+{
+  const { removepkglabBlock } = await import('../src/lib/consumer');
+  const input = 'before\n# pkglab-start\nfoo\n# pkglab-end\nmiddle\n# pkglab-start\nbar\n# pkglab-end\nafter\n';
+  const result = removepkglabBlock(input);
+  assert(!result.includes('# pkglab-start'), 'no start markers remain');
+  assert(!result.includes('# pkglab-end'), 'no end markers remain');
+  assert(result.includes('before'), 'content before preserved');
+  assert(result.includes('after'), 'content after preserved');
+}
+
+heading('deterministicToposort cycle detection');
+{
+  const { deterministicToposort } = await import('../src/lib/graph');
+  const { DepGraph } = await import('dependency-graph');
+  const graph = new DepGraph();
+  graph.addNode('a', {});
+  graph.addNode('b', {});
+  graph.addNode('c', {});
+  graph.addDependency('a', 'b');
+  graph.addDependency('b', 'c');
+  graph.addDependency('c', 'a');
+
+  const result = deterministicToposort(graph as any, new Set(['a', 'b', 'c']));
+  assert(result.length === 3, `toposort returns all nodes despite cycle (got ${result.length})`);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
