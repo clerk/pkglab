@@ -37,5 +37,15 @@ heading('run() without timeout works normally');
   assert(result.stdout.trim() === 'hello', 'echo output correct');
 }
 
+heading('acquirePublishLock basics');
+{
+  const { acquirePublishLock } = await import('../src/lib/lock');
+  // Acquire lock
+  const release = await acquirePublishLock();
+  assert(typeof release === 'function', 'returns release function');
+  // Release lock
+  await release();
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

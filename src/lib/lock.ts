@@ -7,26 +7,31 @@ import { isProcessAlive } from './proc';
 
 export async function acquirePublishLock(): Promise<() => Promise<void>> {
   const lockPath = paths.publishLock;
-  const fd = await openExclusive(lockPath);
 
-  if (fd === null) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const fd = await openExclusive(lockPath);
+    if (fd) {
+      try {
+        await writeAndClose(fd, String(process.pid));
+      } catch (err) {
+        await fd.close().catch(() => {});
+        throw err;
+      }
+      return async () => {
+        await unlink(lockPath).catch(() => {});
+      };
+    }
+
+    // Lock exists, check if stale
     if (await isLockStale(lockPath)) {
       await unlink(lockPath).catch(() => {});
-      const retryFd = await openExclusive(lockPath);
-      if (retryFd === null) {
-        throw new LockAcquisitionError('Failed to acquire publish lock after clearing stale lock');
-      }
-      await writeAndClose(retryFd, String(process.pid));
-    } else {
-      throw new LockAcquisitionError('Another pkglab pub is running');
+      continue; // retry openExclusive
     }
-  } else {
-    await writeAndClose(fd, String(process.pid));
+
+    throw new LockAcquisitionError('Another pkglab pub is running');
   }
 
-  return async () => {
-    await unlink(lockPath).catch(() => {});
-  };
+  throw new LockAcquisitionError('Failed to acquire publish lock after retries');
 }
 
 export async function openExclusive(path: string): Promise<import('node:fs/promises').FileHandle | null> {
@@ -43,6 +48,7 @@ export async function openExclusive(path: string): Promise<import('node:fs/promi
 
 export async function writeAndClose(fd: import('node:fs/promises').FileHandle, content: string): Promise<void> {
   await fd.write(content);
+  await fd.datasync();
   await fd.close();
 }
 
