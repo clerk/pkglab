@@ -94,16 +94,40 @@ export async function ensureListenerRunning(workspaceRoot: string): Promise<void
     return;
   }
 
-  log.info('Starting listener...');
-  try {
-    const info = await startListenerDaemon(workspaceRoot);
-    log.success(`Listener running (PID ${info.pid})`);
-  } catch {
-    // Another process may have won the race
-    if (await isListenerRunning(socketPath)) {
-      return;
+  const { openExclusive, writeAndClose, isLockStale } = await import('./lock');
+  const { paths } = await import('./paths');
+
+  const fd = await openExclusive(paths.listenerLock);
+  if (fd) {
+    try {
+      await writeAndClose(fd, String(process.pid));
+
+      // Re-check after acquiring lock
+      if (await isListenerRunning(socketPath)) {
+        return;
+      }
+
+      log.info('Starting listener...');
+      const info = await startListenerDaemon(workspaceRoot);
+      log.success(`Listener running (PID ${info.pid})`);
+    } finally {
+      await unlink(paths.listenerLock).catch(() => {});
     }
-    throw new Error('Failed to start listener daemon');
+  } else {
+    // Another process is starting the listener. Wait for it.
+    const maxWait = 10000;
+    const start = Date.now();
+    let delay = 100;
+    while (Date.now() - start < maxWait) {
+      await Bun.sleep(delay);
+      if (await isListenerRunning(socketPath)) return;
+      if (await isLockStale(paths.listenerLock)) {
+        await unlink(paths.listenerLock).catch(() => {});
+        return ensureListenerRunning(workspaceRoot);
+      }
+      delay = Math.min(delay * 2, 500);
+    }
+    throw new Error('Listener did not become ready');
   }
 }
 

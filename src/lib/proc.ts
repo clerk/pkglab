@@ -122,15 +122,19 @@ export async function gracefulStop(pid: number): Promise<void> {
 export async function validatePidStartTime(pid: number, startedAt: number): Promise<boolean> {
   try {
     const result = await run(['ps', '-p', String(pid), '-o', 'lstart='], { timeout: 5000 });
-    if (result.exitCode !== 0) {
-      return false;
+    if (result.exitCode === 0 && result.stdout.trim()) {
+      const psTime = new Date(result.stdout.trim()).getTime();
+      if (Number.isFinite(psTime)) {
+        return Math.abs(psTime - startedAt) < 5000;
+      }
     }
-    const psTime = new Date(result.stdout.trim()).getTime();
-    if (!Number.isFinite(psTime)) {
-      return false;
-    }
-    return Math.abs(psTime - startedAt) < 5000;
-  } catch {
-    return false;
-  }
+  } catch {}
+
+  // Linux fallback: if /proc exists, the process is alive (already confirmed by caller)
+  try {
+    const procFile = Bun.file(`/proc/${pid}/stat`);
+    if (await procFile.exists()) return true;
+  } catch {}
+
+  return false;
 }

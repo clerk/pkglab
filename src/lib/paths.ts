@@ -1,7 +1,8 @@
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const pkglab_HOME = join(homedir(), '.pkglab');
+const pkglab_LOG_DIR = join(tmpdir(), `pkglab-${process.getuid?.() ?? 'default'}`);
 
 export const paths = {
   home: pkglab_HOME,
@@ -13,6 +14,7 @@ export const paths = {
   registryStorage: join(pkglab_HOME, 'registry', 'storage'),
   listenersDir: join(pkglab_HOME, 'listeners'),
   daemonLock: join(pkglab_HOME, 'daemon.lock'),
-  logFile: '/tmp/pkglab/registry.log',
-  logDir: '/tmp/pkglab',
+  listenerLock: join(pkglab_HOME, 'listener.lock'),
+  logFile: join(pkglab_LOG_DIR, 'registry.log'),
+  logDir: pkglab_LOG_DIR,
 } as const;
