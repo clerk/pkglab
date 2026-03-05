@@ -8,7 +8,7 @@ const version = rootPkg.version;
 
 console.log(`Syncing version ${version} to npm packages...`);
 
-const platforms = ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64'];
+import { PLATFORMS as platforms } from './platforms';
 
 // Update platform packages
 for (const platform of platforms) {

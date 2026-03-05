@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 VERSION=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${ROOT}/package.json','utf8')).version)")
+# Keep in sync with scripts/platforms.ts
 TARGETS=("darwin-arm64" "darwin-x64" "linux-x64" "linux-arm64")
 
 for target in "${TARGETS[@]}"; do

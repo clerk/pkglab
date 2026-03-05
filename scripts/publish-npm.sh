@@ -23,6 +23,7 @@ cd "$PROJECT_ROOT"
 npm version "$BUMP" --no-git-tag-version > /dev/null
 VERSION=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${PROJECT_ROOT}/package.json','utf8')).version)")
 
+# Keep in sync with scripts/platforms.ts
 PLATFORMS=("darwin-arm64" "darwin-x64" "linux-x64" "linux-arm64")
 
 cd "$PROJECT_ROOT"

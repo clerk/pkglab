@@ -22,7 +22,7 @@ if (checkOutput === version) {
   process.exit(0);
 }
 
-const platforms = ['darwin-arm64', 'darwin-x64', 'linux-x64', 'linux-arm64'] as const;
+import { PLATFORMS as platforms } from './platforms';
 
 // Copy repo README into main package, write redirect READMEs for platform packages
 const repoReadme = await Bun.file(`${ROOT}/README.md`).text();
