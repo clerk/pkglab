@@ -3,7 +3,7 @@ import { unlink } from 'node:fs/promises';
 import type { DaemonInfo } from '../types';
 
 import { loadConfig } from './config';
-import { DaemonAlreadyRunningError } from './errors';
+import { DaemonAlreadyRunningError, DaemonStartTimeoutError } from './errors';
 import { openExclusive, writeAndClose, isLockStale } from './lock';
 import { log } from './log';
 import { paths } from './paths';
@@ -33,6 +33,24 @@ export async function startDaemon(): Promise<DaemonInfo> {
     stderr: 'pipe',
   });
 
+  // Drain stderr concurrently to prevent pipe buffer deadlock.
+  // We read via a reader so we can cancel it on success (the daemon keeps
+  // stderr open, which would otherwise keep the parent process alive).
+  const stderrReader = proc.stderr.getReader();
+  const stderrChunks: Uint8Array[] = [];
+  const stderrPromise = (async () => {
+    try {
+      while (true) {
+        const { done, value } = await stderrReader.read();
+        if (done) break;
+        stderrChunks.push(value);
+      }
+    } catch {
+      // reader cancelled or stream errored
+    }
+    return Buffer.concat(stderrChunks).toString();
+  })();
+
   // Wait for READY signal, process exit, or timeout
   const deadline = timeout(10000);
   const result = await Promise.race([waitForReady(proc), waitForExit(proc), deadline.promise]);
@@ -43,9 +61,12 @@ export async function startDaemon(): Promise<DaemonInfo> {
     if (result === 'timeout') {
       throw new Error('Registry failed to start within 10 seconds');
     }
-    const stderr = await new Response(proc.stderr).text();
+    const stderr = await stderrPromise;
     throw new Error(`Registry process exited unexpectedly: ${stderr}`);
   }
+
+  // Cancel stderr drain so the parent can exit while the daemon runs
+  await stderrReader.cancel();
 
   // Write PID only after confirmed READY
   await Bun.write(paths.pid, JSON.stringify({ pid: proc.pid, port: config.port, startedAt: Date.now() }));
@@ -84,17 +105,17 @@ export async function ensureDaemonRunning(): Promise<DaemonInfo> {
 }
 
 async function waitForDaemon(): Promise<DaemonInfo> {
-  if (await isLockStale(paths.daemonLock)) {
-    await unlink(paths.daemonLock).catch(() => {});
-    return ensureDaemonRunning();
-  }
-
   log.info('Waiting for registry to start...');
   const maxWait = 15000;
   const start = Date.now();
   let delay = 100;
 
   while (Date.now() - start < maxWait) {
+    if (await isLockStale(paths.daemonLock)) {
+      await unlink(paths.daemonLock).catch(() => {});
+      return ensureDaemonRunning();
+    }
+
     await Bun.sleep(delay);
     const status = await getDaemonStatus();
     if (status?.running) {
@@ -103,7 +124,7 @@ async function waitForDaemon(): Promise<DaemonInfo> {
     delay = Math.min(delay * 2, 1000);
   }
 
-  throw new Error('Registry did not become ready (another process may have failed to start it)');
+  throw new DaemonStartTimeoutError();
 }
 
 export async function stopDaemon(): Promise<void> {
@@ -113,7 +134,12 @@ export async function stopDaemon(): Promise<void> {
   }
 
   await gracefulStop(status.pid);
-  await unlink(paths.pid).catch(() => {});
+
+  // Only unlink if PID file still points to the process we stopped
+  const current = await getDaemonStatus();
+  if (!current || current.pid === status.pid) {
+    await unlink(paths.pid).catch(() => {});
+  }
 }
 
 export async function getDaemonStatus(): Promise<DaemonInfo | null> {
@@ -163,10 +189,11 @@ async function validatePid(pid: number, port: number | undefined, startedAt?: nu
   } else {
     // Legacy: check command string (pidfiles without startedAt)
     try {
-      const result = await run(['ps', '-p', String(pid), '-o', 'command='], {});
+      const result = await run(['ps', '-p', String(pid), '-o', 'command='], { timeout: 5000 });
       if (result.exitCode === 0) {
         const match =
           result.stdout.includes('verbunccio-worker') ||
+          result.stdout.includes('pkglab') ||
           (result.stdout.includes('bun') && result.stdout.includes('verbunccio'));
         if (match) return true;
       }
@@ -185,5 +212,8 @@ async function validatePid(pid: number, port: number | undefined, startedAt?: nu
     }
   }
 
-  return false;
+  // If startedAt is set, time validation failed but process IS alive
+  // (isProcessAlive passed in getDaemonStatus). Without a port to ping,
+  // assume it's ours rather than orphaning the daemon.
+  return startedAt !== undefined;
 }

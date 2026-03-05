@@ -46,3 +46,10 @@ export class ListenerNotRunningError extends pkglabError {
     this.name = 'ListenerNotRunningError';
   }
 }
+
+export class DaemonStartTimeoutError extends pkglabError {
+  constructor(msg = 'Registry did not become ready (another process may have failed to start it)') {
+    super(msg);
+    this.name = 'DaemonStartTimeoutError';
+  }
+}

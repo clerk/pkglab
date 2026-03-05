@@ -1,6 +1,6 @@
 import { defineCommand } from 'citty';
 
-import { startDaemon, getDaemonStatus } from '../lib/daemon';
+import { ensureDaemonRunning, getDaemonStatus } from '../lib/daemon';
 import { log } from '../lib/log';
 import { prefetchUpdateCheck } from '../lib/update-check';
 
@@ -18,9 +18,7 @@ export default defineCommand({
     // Start fetch before interactive prompt so it runs in parallel
     const showUpdate = await prefetchUpdateCheck();
 
-    log.info('Starting registry...');
-    const info = await startDaemon();
-    log.success(`pkglab running on http://127.0.0.1:${info.port} (PID ${info.pid})`);
+    const info = await ensureDaemonRunning();
 
     const { deactivateAllRepos, loadOperationalRepos, getActiveRepos } = await import('../lib/repo-state');
 
