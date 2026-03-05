@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 
 import type { RepoWorkItem, LockfilePatchEntry } from '../lib/consumer';
 import type { SpinnerLine } from '../lib/spinner';
-import type { WorkspacePackage, PublishEntry } from '../types';
+import type { WorkspacePackage, PublishEntry, RepoEntry } from '../types';
 
 import { getPositionalArgs } from '../lib/args';
 import { c } from '../lib/color';
@@ -564,6 +564,7 @@ export default defineCommand({
       cascade.cascadePackages,
       workspace.packages,
       args['no-pm-optimizations'],
+      cascade.activeRepos,
     );
 
     if (verbose && publishTiming) {
@@ -595,6 +596,7 @@ async function publishPackages(
   allCascadePackages?: WorkspacePackage[],
   workspacePackages?: WorkspacePackage[],
   noPmOptimizations = false,
+  preloadedActiveRepos?: RepoEntry[],
 ): Promise<PublishTiming | undefined> {
   const catalogs = await loadCatalogs(workspaceRoot);
 
@@ -631,7 +633,7 @@ async function publishPackages(
   }
 
   // Build consumer work items before publishing so we can stream installs
-  const consumerWork = await buildConsumerWorkItems(plan, tag);
+  const consumerWork = await buildConsumerWorkItems(plan, tag, preloadedActiveRepos);
 
   // Compute the required set for each repo: which packages from the publish batch
   // must be in the registry before the repo's install can succeed.
