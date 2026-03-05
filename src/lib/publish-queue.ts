@@ -214,6 +214,16 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
     }
   } finally {
     ws.publishing = false;
+
+    // Clean up empty lanes to prevent unbounded growth
+    for (const [tag, lane] of ws.lanes) {
+      if (lane.pending.size === 0 && !lane.root) {
+        ws.lanes.delete(tag);
+      }
+    }
+    if (ws.lanes.size === 0 && !ws.debounceTimer) {
+      workspaces.delete(workspaceRoot);
+    }
   }
 }
 
