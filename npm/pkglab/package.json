@@ -1,6 +1,6 @@
 {
   "name": "pkglab",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "Local package development CLI with a built-in registry",
   "keywords": [
     "local",
@@ -25,10 +25,10 @@
     "bin"
   ],
   "optionalDependencies": {
-    "pkglab-darwin-arm64": "0.14.0",
-    "pkglab-darwin-x64": "0.14.0",
-    "pkglab-linux-arm64": "0.14.0",
-    "pkglab-linux-x64": "0.14.0"
+    "pkglab-darwin-arm64": "0.15.0",
+    "pkglab-darwin-x64": "0.15.0",
+    "pkglab-linux-arm64": "0.15.0",
+    "pkglab-linux-x64": "0.15.0"
   },
   "engines": {
     "node": ">=18"
