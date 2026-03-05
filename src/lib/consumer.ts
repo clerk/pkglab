@@ -264,6 +264,14 @@ export async function restorePackage(
         catalogFormat ?? catalogResult.format,
       );
       log.info(`Restored ${pkgName} to ${original} (catalog)`);
+    } else if (catalogResult && !original) {
+      await removeCatalogEntry(
+        catalogResult.root,
+        pkgName,
+        catalogName,
+        catalogFormat ?? catalogResult.format,
+      );
+      log.info(`Removed ${pkgName} from catalog (was added by pkglab, no original version)`);
     } else if (!catalogResult) {
       log.warn(`Could not find catalog root for ${pkgName}, restoring in package.json`);
       if (original) {
@@ -320,6 +328,7 @@ async function sanitizeBunLockfile(dir: string): Promise<void> {
     return;
   }
   const content = await lockFile.text();
+  LOCALHOST_URL_RE.lastIndex = 0;
   if (!LOCALHOST_URL_RE.test(content)) {
     return;
   }
@@ -423,8 +432,10 @@ export async function installWithVersionUpdates(
         const prevTargets = previousVersions.get(entry.name) ?? [];
         if (entry.catalogName && catalogRoot) {
           const prev = prevTargets[0]?.original ?? null;
-          if (prev !== null) {
+          if (prev !== null && prev !== '') {
             await updateCatalogVersion(catalogRoot, entry.name, prev, entry.catalogName, entry.catalogFormat);
+          } else {
+            await removeCatalogEntry(catalogRoot, entry.name, entry.catalogName, entry.catalogFormat);
           }
         } else {
           for (const t of prevTargets) {
@@ -595,6 +606,47 @@ async function updatePnpmCatalogVersion(
 
   await Bun.write(wsPath, stringify(ws));
   return { previousVersion };
+}
+
+/**
+ * Remove a package entry from a catalog. Used when restoring or rolling back
+ * a package that was freshly added by pkglab (no original version to restore).
+ */
+export async function removeCatalogEntry(
+  rootDir: string,
+  pkgName: string,
+  catalogName: string,
+  format: CatalogFormat = 'package-json',
+): Promise<void> {
+  if (format === 'pnpm-workspace') {
+    const { parse, stringify } = await import('yaml');
+    const wsPath = join(rootDir, 'pnpm-workspace.yaml');
+    const text = await Bun.file(wsPath).text();
+    const ws = parse(text);
+    if (catalogName === 'default') {
+      if (ws.catalog) {
+        delete ws.catalog[pkgName];
+      }
+    } else {
+      if (ws.catalogs?.[catalogName]) {
+        delete ws.catalogs[catalogName][pkgName];
+      }
+    }
+    await Bun.write(wsPath, stringify(ws));
+  } else {
+    const pkgJsonPath = join(rootDir, 'package.json');
+    const pkgJson = await Bun.file(pkgJsonPath).json();
+    if (catalogName === 'default') {
+      if (pkgJson.catalog) {
+        delete pkgJson.catalog[pkgName];
+      }
+    } else {
+      if (pkgJson.catalogs?.[catalogName]) {
+        delete pkgJson.catalogs[catalogName][pkgName];
+      }
+    }
+    await Bun.write(pkgJsonPath, JSON.stringify(pkgJson, null, 2) + '\n');
+  }
 }
 
 export async function ensureNpmrcForActiveRepos(port: number): Promise<void> {

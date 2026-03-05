@@ -138,5 +138,26 @@ heading('fingerprint state round-trip');
   }
 }
 
+heading('regex /g lastIndex bug');
+{
+  // Simulate the bug: a module-level /g regex retains lastIndex across calls
+  const re = /"http:\/\/(?:127\.0\.0\.1|localhost):[^"]*"/g;
+  const content = '"http://127.0.0.1:4873/pkg/-/pkg-1.0.0.tgz"';
+
+  // First call advances lastIndex
+  const first = re.test(content);
+  assert(first === true, 'first .test() finds the match');
+  assert(re.lastIndex > 0, 'lastIndex advanced after first .test()');
+
+  // Without reset, second call on the same content can return false
+  const secondWithoutReset = re.test(content);
+  assert(secondWithoutReset === false, 'second .test() without reset misses the match (the bug)');
+
+  // With reset, it works correctly
+  re.lastIndex = 0;
+  const secondWithReset = re.test(content);
+  assert(secondWithReset === true, 'second .test() after lastIndex reset finds the match (the fix)');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

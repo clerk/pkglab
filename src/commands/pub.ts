@@ -729,6 +729,9 @@ async function publishPackages(
                     if (status === 'ok') {
                       log.success(`  ${repo.displayName}: updated ${repo.packages.map(e => e.name).join(', ')}`);
                     }
+                  }).catch(err => {
+                    log.error(`  ${repo.displayName}: install failed`);
+                    throw err;
                   }),
                 );
               }
@@ -952,20 +955,20 @@ async function runRepoInstall(
   // may contain transitive pkglab dependencies that also need integrity updates.
   let patchEntries: LockfilePatchEntry[] | undefined;
   if (repo.pm === 'pnpm' && getIntegrityMap) {
-    // Determine the old version from any tracked package (all share the same timestamp)
-    let oldVersion: string | undefined;
-    for (const pkg of repo.packages) {
-      oldVersion = repo.state.packages[pkg.name]?.current;
-      if (oldVersion) break;
-    }
-
-    if (oldVersion) {
-      const integrityMap = await getIntegrityMap();
-      if (integrityMap.size > 0) {
-        const newVersion = repo.packages[0].version;
-        patchEntries = [];
-        for (const [name, integrity] of integrityMap) {
+    const integrityMap = await getIntegrityMap();
+    if (integrityMap.size > 0) {
+      patchEntries = [];
+      for (const [name, integrity] of integrityMap) {
+        const oldVersion = repo.state.packages[name]?.current;
+        const newVersion = repo.packages.find(p => p.name === name)?.version ?? repo.packages[0].version;
+        if (oldVersion) {
           patchEntries.push({ name, oldVersion, newVersion, integrity });
+        } else {
+          // Transitive dep not directly tracked - use any tracked version as fallback
+          const anyOld = Object.values(repo.state.packages).find(p => p.current)?.current;
+          if (anyOld) {
+            patchEntries.push({ name, oldVersion: anyOld, newVersion, integrity });
+          }
         }
       }
     }
