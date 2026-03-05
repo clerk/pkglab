@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 import { c } from '../lib/color';
 import { removeRegistryFromNpmrc, removePreCommitHook, removeSkipWorktree, restorePackage } from '../lib/consumer';
 import { stopDaemon, getDaemonStatus } from '../lib/daemon';
+import { CommandError } from '../lib/errors';
 import { stopAllListeners } from '../lib/listener-daemon';
 import { acquirePublishLock } from '../lib/lock';
 import { log } from '../lib/log';
@@ -100,7 +101,10 @@ export default defineCommand({
           `${failedRepos.length} repo${failedRepos.length > 1 ? 's' : ''} failed to restore. ` +
           'Fix the issues and retry, or run `pkglab down --force` to stop without restoring.',
         );
-        process.exit(1);
+        throw new CommandError(
+          `${failedRepos.length} repo${failedRepos.length > 1 ? 's' : ''} failed to restore.`,
+          { logged: true },
+        );
       }
     } finally {
       await releaseLock?.();

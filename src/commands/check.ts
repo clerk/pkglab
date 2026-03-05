@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 import { join, relative } from 'node:path';
 
 import { c } from '../lib/color';
+import { CommandError } from '../lib/errors';
 import { log } from '../lib/log';
 import { run } from '../lib/proc';
 import { ispkglabVersion } from '../lib/version';
@@ -93,7 +94,7 @@ export default defineCommand({
       log.success('No pkglab artifacts found');
     } else {
       log.error(`Found ${issues} pkglab artifact${issues !== 1 ? 's' : ''} that should not be committed`);
-      process.exit(1);
+      throw new CommandError(`Found ${issues} pkglab artifact${issues !== 1 ? 's' : ''} that should not be committed`, { logged: true });
     }
   },
 });

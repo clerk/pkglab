@@ -3,7 +3,7 @@ import { defineCommand } from 'citty';
 import { getPositionalArgs } from '../../lib/args';
 import { loadConfig } from '../../lib/config';
 import { getDaemonStatus } from '../../lib/daemon';
-import { DaemonNotRunningError } from '../../lib/errors';
+import { CommandError, DaemonNotRunningError } from '../../lib/errors';
 import { log } from '../../lib/log';
 import { listPackageNames, removePackage } from '../../lib/registry';
 
@@ -28,8 +28,7 @@ export default defineCommand({
     }
 
     if (toRemove.length === 0) {
-      log.error('Specify package name(s) or use --all');
-      process.exit(1);
+      throw new CommandError('Specify package name(s) or use --all');
     }
 
     const results = await Promise.all(

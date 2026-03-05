@@ -1,12 +1,9 @@
-// NOTE: detectChanges is not exported from pub.ts. To run these tests,
-// add `export` before `function detectChanges(` in src/commands/pub.ts.
-
 import { describe, test, expect } from 'bun:test';
 import { DepGraph } from 'dependency-graph';
 
 import type { WorkspacePackage } from '../../types';
 import type { PackageFingerprint } from '../../lib/fingerprint';
-import { detectChanges } from '../pub';
+import { detectChanges } from '../../lib/cascade';
 
 // Helper to create a minimal WorkspacePackage
 function makePackage(

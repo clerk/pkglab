@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 
 import { loadConfig } from '../lib/config';
 import { getDaemonStatus } from '../lib/daemon';
+import { SilentExitError } from '../lib/errors';
 import { getListenerDaemonStatus } from '../lib/listener-daemon';
 import { log } from '../lib/log';
 import { discoverWorkspace } from '../lib/workspace';
@@ -21,17 +22,18 @@ export default defineCommand({
 
     if (args.health) {
       if (!status?.running) {
-        process.exit(1);
+        throw new SilentExitError(1);
       }
       try {
         const resp = await fetch(`http://127.0.0.1:${config.port}/-/ping`);
         if (!resp.ok) {
-          process.exit(1);
+          throw new SilentExitError(1);
         }
-      } catch {
-        process.exit(1);
+      } catch (err) {
+        if (err instanceof SilentExitError) throw err;
+        throw new SilentExitError(1);
       }
-      process.exit(0);
+      throw new SilentExitError(0);
     }
 
     if (status?.running) {

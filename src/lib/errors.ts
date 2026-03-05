@@ -53,3 +53,25 @@ export class DaemonStartTimeoutError extends pkglabError {
     this.name = 'DaemonStartTimeoutError';
   }
 }
+
+export class CommandError extends pkglabError {
+  exitCode: number;
+  logged: boolean;
+
+  constructor(message: string, opts?: { exitCode?: number; logged?: boolean }) {
+    super(message);
+    this.name = 'CommandError';
+    this.exitCode = opts?.exitCode ?? 1;
+    this.logged = opts?.logged ?? false;
+  }
+}
+
+export class SilentExitError extends pkglabError {
+  exitCode: number;
+
+  constructor(exitCode = 1) {
+    super('');
+    this.name = 'SilentExitError';
+    this.exitCode = exitCode;
+  }
+}

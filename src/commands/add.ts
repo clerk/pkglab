@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { join, resolve, relative } from 'node:path';
 
 import type { VersionEntry, CatalogFormat } from '../lib/consumer';
-import type { pkglabConfig, RepoState, WorkspacePackage } from '../types';
+import type { pkglabConfig, RepoState } from '../types';
 
 import { getPositionalArgs, normalizeScope } from '../lib/args';
 import { c } from '../lib/color';
@@ -17,6 +17,7 @@ import {
   loadCatalogData,
 } from '../lib/consumer';
 import { ensureDaemonRunning } from '../lib/daemon';
+import { CommandError, SilentExitError } from '../lib/errors';
 import { runPreHook, runPostHook, runErrorHook } from '../lib/hooks';
 import { log } from '../lib/log';
 import { detectPackageManager } from '../lib/pm-detect';
@@ -24,13 +25,8 @@ import { getDistTags, listPackageNames } from '../lib/registry';
 import { canonicalRepoPath, loadRepoByPath, saveRepoByPath } from '../lib/repo-state';
 import { prefetchUpdateCheck } from '../lib/update-check';
 import { sanitizeTag, ispkglabVersion, extractTag } from '../lib/version';
-import { discoverWorkspace } from '../lib/workspace';
-
-type WorkspaceDiscovery = {
-  root: string;
-  tool: string;
-  packages: WorkspacePackage[];
-};
+import { collectWorkspacePackageJsons, discoverWorkspace } from '../lib/workspace';
+import type { WorkspaceDiscovery } from '../lib/workspace';
 
 function parsePackageArg(input: string): { name: string; tag?: string } {
   const lastAt = input.lastIndexOf('@');
@@ -74,7 +70,7 @@ function resolveFromDistTags(
       const tagList = available.filter(t => t !== 'pkglab').join(', ');
       log.error(`No untagged version for '${pkgName}'. Available tags: ${tagList}`);
     }
-    process.exit(1);
+    throw new CommandError(`No matching version for ${pkgName}`, { logged: true });
   }
 
   return { name: pkgName, version, tag };
@@ -86,33 +82,6 @@ const NPMRC_NOTICE =
   'pkglab has applied --skip-worktree to prevent accidental commits.\n' +
   'Run pkglab restore --all to restore your .npmrc.';
 
-/**
- * Discover workspace and collect root + sub-package package.json data.
- * Returns undefined if the path is not a workspace.
- * Accepts an optional pre-computed workspace discovery result to avoid redundant filesystem walks.
- */
-async function collectWorkspacePackageJsons(
-  repoPath: string,
-  cachedWorkspace?: WorkspaceDiscovery,
-): Promise<Array<{ path: string; relDir: string; packageJson: Record<string, any> }> | undefined> {
-  try {
-    const ws = cachedWorkspace ?? (await discoverWorkspace(repoPath));
-    const rootPkgJson = await Bun.file(join(repoPath, 'package.json')).json();
-    return [
-      { path: join(repoPath, 'package.json'), relDir: '.', packageJson: rootPkgJson },
-      ...ws.packages
-        .filter(p => p.dir !== repoPath && p.dir !== ws.root)
-        .map(p => ({
-          path: join(p.dir, 'package.json'),
-          relDir: relative(repoPath, p.dir) || '.',
-          packageJson: p.packageJson as Record<string, any>,
-        })),
-    ];
-  } catch {
-    // Not a workspace (standalone project)
-    return undefined;
-  }
-}
 
 async function batchInstallPackages(
   config: pkglabConfig,
@@ -146,8 +115,7 @@ async function batchInstallPackages(
         }
       } else if (catalog) {
         const source = found.format === 'pnpm-workspace' ? 'pnpm-workspace.yaml' : 'workspace root package.json';
-        log.error(`${pkg.name} is not in any catalog. Add it to the catalog field in ${source} first.`);
-        process.exit(1);
+        throw new CommandError(`${pkg.name} is not in any catalog. Add it to the catalog field in ${source} first.`);
       } else if (verbose) {
         log.dim(`  ${pkg.name}: not found in any catalog, using direct mode`);
       }
@@ -158,10 +126,9 @@ async function batchInstallPackages(
       effectivePath = found.root;
     }
   } else if (catalog) {
-    log.error(
+    throw new CommandError(
       "No catalog found. The workspace root needs a 'catalog' or 'catalogs' field in package.json or pnpm-workspace.yaml.",
     );
-    process.exit(1);
   } else if (verbose) {
     log.dim('  No catalog found in workspace');
   }
@@ -218,7 +185,7 @@ async function batchInstallPackages(
             unresolvable.map(n => `  ${n}`).join('\n') +
             `\nRun pkglab restore for these packages first: pkglab restore ${unresolvable.join(' ')}`,
         );
-        process.exit(1);
+        throw new CommandError('Stale pkglab packages with no matching registry version', { logged: true });
       }
     }
   }
@@ -396,8 +363,7 @@ async function interactivePick(config: pkglabConfig, fixedTag?: string): Promise
   ]);
 
   if (packageNames.length === 0) {
-    log.error('No pkglab packages found. Publish first: pkglab pub');
-    process.exit(1);
+    throw new CommandError('No pkglab packages found. Publish first: pkglab pub');
   }
 
   let selectedNames: string[];
@@ -409,7 +375,7 @@ async function interactivePick(config: pkglabConfig, fixedTag?: string): Promise
     });
   } catch (err) {
     if (err instanceof ExitPromptError) {
-      process.exit(0);
+      throw new SilentExitError(0);
     }
     throw err;
   }
@@ -449,7 +415,7 @@ async function interactivePick(config: pkglabConfig, fixedTag?: string): Promise
         selectedTag = picked === 'pkglab' ? undefined : picked;
       } catch (err) {
         if (err instanceof ExitPromptError) {
-          process.exit(0);
+          throw new SilentExitError(0);
         }
         throw err;
       }
@@ -471,8 +437,7 @@ async function resolveScopePackages(
 ): Promise<{ resolved: ResolvedPackage[]; workspace: WorkspaceDiscovery }> {
   const prefix = normalizeScope(scope);
   if (!prefix) {
-    log.error(`Invalid scope: "${scope}". Use a scope name like "clerk" or "@clerk".`);
-    process.exit(1);
+    throw new CommandError(`Invalid scope: "${scope}". Use a scope name like "clerk" or "@clerk".`);
   }
 
   // Discover workspace once (use cache if provided)
@@ -480,15 +445,13 @@ async function resolveScopePackages(
   try {
     workspace = cachedWorkspace ?? (await discoverWorkspace(repoPath));
   } catch {
-    log.error('--scope requires a workspace. No workspace detected.');
-    process.exit(1);
+    throw new CommandError('--scope requires a workspace. No workspace detected.');
   }
 
   // Scan workspace
   const allPackageJsons = await collectWorkspacePackageJsons(repoPath, workspace);
   if (!allPackageJsons) {
-    log.error('--scope requires a workspace. No workspace detected.');
-    process.exit(1);
+    throw new CommandError('--scope requires a workspace. No workspace detected.');
   }
 
   if (verbose) {
@@ -520,8 +483,7 @@ async function resolveScopePackages(
   }
 
   if (scopedDeps.size === 0) {
-    log.error(`No dependencies matching scope '${prefix.slice(0, -1)}' found in workspace.`);
-    process.exit(1);
+    throw new CommandError(`No dependencies matching scope '${prefix.slice(0, -1)}' found in workspace.`);
   }
 
   // Check all are published, resolve versions
@@ -545,7 +507,7 @@ async function resolveScopePackages(
         missing.map(n => `  ${n}`).join('\n') +
         `\nPublish them first: pkglab pub ${missing.join(' ')}`,
     );
-    process.exit(1);
+    throw new CommandError('Packages not published in the local registry', { logged: true });
   }
 
   log.info(`Found ${resolved.length} packages matching ${prefix}*`);
@@ -610,12 +572,10 @@ export default defineCommand({
 
     // Validation
     if (scope && names.length > 0) {
-      log.error('Cannot combine --scope with package names. Use one or the other.');
-      process.exit(1);
+      throw new CommandError('Cannot combine --scope with package names. Use one or the other.');
     }
     if (scope && packagejson) {
-      log.error('Cannot combine --scope with -p. Scope scans the entire workspace.');
-      process.exit(1);
+      throw new CommandError('Cannot combine --scope with -p. Scope scans the entire workspace.');
     }
     if (tag && names.length > 0) {
       const hasInlineTag = names.some(n => {
@@ -623,14 +583,12 @@ export default defineCommand({
         return lastAt > 0 && n.slice(lastAt + 1).length > 0;
       });
       if (hasInlineTag) {
-        log.error('Cannot combine --tag with inline @tag syntax. Use one or the other.');
-        process.exit(1);
+        throw new CommandError('Cannot combine --tag with inline @tag syntax. Use one or the other.');
       }
     }
 
     if (dryRun && names.length === 0 && !scope) {
-      log.error('--dry-run requires package names or --scope. Interactive mode is not supported with --dry-run.');
-      process.exit(1);
+      throw new CommandError('--dry-run requires package names or --scope. Interactive mode is not supported with --dry-run.');
     }
 
     const [, repoPath] = await Promise.all([ensureDaemonRunning(), canonicalRepoPath(process.cwd())]);
@@ -673,7 +631,7 @@ export default defineCommand({
             ...hookCtx,
             error: { stage: 'pre-hook', message: `pre-add hook ${label}`, failedHook: 'pre-add' },
           });
-          process.exit(1);
+          throw new CommandError(`pre-add hook ${label}`, { logged: true });
         }
 
         try {

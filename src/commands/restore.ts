@@ -3,6 +3,7 @@ import { defineCommand } from 'citty';
 import { getPositionalArgs, normalizeScope } from '../lib/args';
 import { loadConfig } from '../lib/config';
 import { removeRegistryFromNpmrc, removePreCommitHook, removeSkipWorktree, restorePackage } from '../lib/consumer';
+import { CommandError } from '../lib/errors';
 import { runPreHook, runPostHook, runErrorHook } from '../lib/hooks';
 import { log } from '../lib/log';
 import { detectPackageManager, runInstall } from '../lib/pm-detect';
@@ -35,8 +36,7 @@ export default defineCommand({
 
     // Validation
     if (scope && names.length > 0) {
-      log.error('Cannot combine --scope with package names. Use one or the other.');
-      process.exit(1);
+      throw new CommandError('Cannot combine --scope with package names. Use one or the other.');
     }
 
     const repoPath = await canonicalRepoPath(process.cwd());
@@ -62,8 +62,7 @@ export default defineCommand({
     if (scope) {
       const prefix = normalizeScope(scope);
       if (!prefix) {
-        log.error(`Invalid scope: "${scope}". Use a scope name like "clerk" or "@clerk".`);
-        process.exit(1);
+        throw new CommandError(`Invalid scope: "${scope}". Use a scope name like "clerk" or "@clerk".`);
       }
       toRestore = Object.keys(repo.state.packages).filter(name => name.startsWith(prefix));
       if (toRestore.length === 0) {
@@ -75,8 +74,7 @@ export default defineCommand({
     } else if (names.length > 0) {
       toRestore = names;
     } else {
-      log.error('Specify package name(s), --scope, or --all');
-      process.exit(1);
+      throw new CommandError('Specify package name(s), --scope, or --all');
     }
 
     // Filter by tag if provided
@@ -140,7 +138,7 @@ export default defineCommand({
         ...hookCtx,
         error: { stage: 'pre-hook', message: `pre-restore hook ${label}`, failedHook: 'pre-restore' },
       });
-      process.exit(1);
+      throw new CommandError(`pre-restore hook ${label}`, { logged: true });
     }
 
     // Restore each package, update state, clean up, install

@@ -2,6 +2,7 @@ import { defineCommand } from 'citty';
 import { rm } from 'node:fs/promises';
 
 import { getDaemonStatus, stopDaemon } from '../lib/daemon';
+import { CommandError } from '../lib/errors';
 import { clearFingerprintState } from '../lib/fingerprint-state';
 import { log } from '../lib/log';
 import { paths } from '../lib/paths';
@@ -28,8 +29,7 @@ export default defineCommand({
     }
 
     if (!args.hard) {
-      log.error('Use --hard to confirm: pkglab reset --hard');
-      process.exit(1);
+      throw new CommandError('Use --hard to confirm: pkglab reset --hard');
     }
 
     const status = await getDaemonStatus();

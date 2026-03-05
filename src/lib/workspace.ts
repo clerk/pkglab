@@ -1,7 +1,13 @@
 import { getPackages } from '@manypkg/get-packages';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 import type { WorkspacePackage } from '../types';
+
+export type WorkspaceDiscovery = {
+  root: string;
+  tool: string;
+  packages: WorkspacePackage[];
+};
 
 export type WorkspaceTool = 'pnpm' | 'yarn' | 'npm' | 'bolt' | 'lerna' | 'rush' | 'root';
 
@@ -46,4 +52,32 @@ export async function loadCatalogs(workspaceRoot: string): Promise<Record<string
     }
   }
   return result;
+}
+
+/**
+ * Discover workspace and collect root + sub-package package.json data.
+ * Returns undefined if the path is not a workspace.
+ * Accepts an optional pre-computed workspace discovery result to avoid redundant filesystem walks.
+ */
+export async function collectWorkspacePackageJsons(
+  repoPath: string,
+  cachedWorkspace?: WorkspaceDiscovery,
+): Promise<Array<{ path: string; relDir: string; packageJson: Record<string, any> }> | undefined> {
+  try {
+    const ws = cachedWorkspace ?? (await discoverWorkspace(repoPath));
+    const rootPkgJson = await Bun.file(join(repoPath, 'package.json')).json();
+    return [
+      { path: join(repoPath, 'package.json'), relDir: '.', packageJson: rootPkgJson },
+      ...ws.packages
+        .filter(p => p.dir !== repoPath && p.dir !== ws.root)
+        .map(p => ({
+          path: join(p.dir, 'package.json'),
+          relDir: relative(repoPath, p.dir) || '.',
+          packageJson: p.packageJson as Record<string, any>,
+        })),
+    ];
+  } catch {
+    // Not a workspace (standalone project)
+    return undefined;
+  }
 }

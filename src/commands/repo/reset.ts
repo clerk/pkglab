@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import type { RepoEntry } from '../../types';
 
 import { removeRegistryFromNpmrc, removePreCommitHook, removeSkipWorktree, restorePackage } from '../../lib/consumer';
+import { CommandError } from '../../lib/errors';
 import { log } from '../../lib/log';
 import { runInstall } from '../../lib/pm-detect';
 import {
@@ -52,14 +53,12 @@ export default defineCommand({
       const canonical = await canonicalRepoPath(args.name);
       const state = await loadRepoByPath(canonical);
       if (!state) {
-        log.error(`Repo not found at path: ${args.name}`);
-        process.exit(1);
+        throw new CommandError(`Repo not found at path: ${args.name}`);
       }
       const displayName = await getRepoDisplayName(state.path);
       targets = [{ displayName, state }];
     } else {
-      log.error('Specify a repo path, --all, or --stale');
-      process.exit(1);
+      throw new CommandError('Specify a repo path, --all, or --stale');
     }
 
     for (const { displayName, state } of targets) {
