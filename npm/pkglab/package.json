@@ -9,13 +9,13 @@
     "registry",
     "workspace"
   ],
-  "homepage": "https://github.com/nikosdouvlis/pkglab",
-  "bugs": "https://github.com/nikosdouvlis/pkglab/issues",
+  "homepage": "https://github.com/clerk/pkglab",
+  "bugs": "https://github.com/clerk/pkglab/issues",
   "license": "MIT",
   "author": "Nikos Douvlis <nikosdouvlis@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nikosdouvlis/pkglab.git"
+    "url": "https://github.com/clerk/pkglab.git"
   },
   "bin": {
     "pkgl": "bin/pkglab",
