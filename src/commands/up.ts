@@ -24,10 +24,9 @@ export default defineCommand({
 
     const { deactivateAllRepos, loadOperationalRepos, getActiveRepos } = await import('../lib/repo-state');
 
-    const previouslyActive = new Set((await getActiveRepos()).map(r => r.state.path));
-    await deactivateAllRepos();
-
     const repos = await loadOperationalRepos();
+    const previouslyActive = new Set((await getActiveRepos(repos)).map(r => r.state.path));
+    await deactivateAllRepos(repos);
     if (repos.length > 0) {
       // Propagate port to .npmrc in linked repos
       const { addRegistryToNpmrc } = await import('../lib/consumer');

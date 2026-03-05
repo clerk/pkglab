@@ -2,7 +2,7 @@ import { defineCommand } from 'citty';
 import { exists } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { RepoState } from '../../types';
+import type { RepoEntry, RepoState } from '../../types';
 
 import { removeRegistryFromNpmrc, removePreCommitHook, removeSkipWorktree, restorePackage } from '../../lib/consumer';
 import { log } from '../../lib/log';
@@ -44,7 +44,7 @@ export default defineCommand({
       return;
     }
 
-    let targets: Array<{ displayName: string; state: RepoState }>;
+    let targets: RepoEntry[];
 
     if (args.all) {
       targets = await loadOperationalRepos();

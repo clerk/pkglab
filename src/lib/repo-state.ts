@@ -1,7 +1,7 @@
 import { realpath, readdir, unlink, exists } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 
-import type { RepoState } from '../types';
+import type { RepoEntry, RepoState } from '../types';
 
 import { log } from './log';
 import { paths } from './paths';
@@ -66,7 +66,7 @@ export async function deleteRepoByPath(repoPath: string): Promise<void> {
   });
 }
 
-export async function findRepoByPath(repoPath: string): Promise<{ displayName: string; state: RepoState } | null> {
+export async function findRepoByPath(repoPath: string): Promise<RepoEntry | null> {
   const canonical = await canonicalRepoPath(repoPath);
   const filename = repoFileName(canonical);
   const file = Bun.file(join(paths.reposDir, `${filename}.json`));
@@ -84,19 +84,16 @@ export async function findRepoByPath(repoPath: string): Promise<{ displayName: s
  * Deletes the state file and logs a message for each pruned repo.
  * Returns only the repos that still exist.
  */
-async function pruneStaleRepos(
-  repos: Array<{ displayName: string; state: RepoState }>,
-): Promise<Array<{ displayName: string; state: RepoState }>> {
-  const valid: Array<{ displayName: string; state: RepoState }> = [];
-  for (const repo of repos) {
-    if (await exists(repo.state.path)) {
-      valid.push(repo);
-    } else {
-      await deleteRepoByPath(repo.state.path);
-      log.warn(`${repo.displayName}: directory no longer exists, automatically pruned from pkglab`);
-    }
+async function pruneStaleRepos(repos: RepoEntry[]): Promise<RepoEntry[]> {
+  const checks = await Promise.all(
+    repos.map(async repo => ({ repo, alive: await exists(repo.state.path) })),
+  );
+  const stale = checks.filter(c => !c.alive);
+  for (const { repo } of stale) {
+    await deleteRepoByPath(repo.state.path);
+    log.warn(`${repo.displayName}: directory no longer exists, automatically pruned from pkglab`);
   }
-  return valid;
+  return checks.filter(c => c.alive).map(c => c.repo);
 }
 
 /**
@@ -104,12 +101,12 @@ async function pruneStaleRepos(
  * Use this for any operational path that will read/write repo files.
  * Use loadAllRepos() when you need raw state without side effects (e.g. debugging).
  */
-export async function loadOperationalRepos(): Promise<Array<{ displayName: string; state: RepoState }>> {
+export async function loadOperationalRepos(): Promise<RepoEntry[]> {
   const all = await loadAllRepos();
   return pruneStaleRepos(all);
 }
 
-export async function loadAllRepos(): Promise<Array<{ displayName: string; state: RepoState }>> {
+export async function loadAllRepos(): Promise<RepoEntry[]> {
   try {
     const files = await readdir(paths.reposDir);
     const jsonFiles = files.filter(f => f.endsWith('.json'));
@@ -138,7 +135,7 @@ export async function loadAllRepos(): Promise<Array<{ displayName: string; state
       }),
     );
 
-    return entries.filter((e): e is { displayName: string; state: RepoState } => e !== null);
+    return entries.filter((e): e is RepoEntry => e !== null);
   } catch (e: any) {
     if (e?.code !== 'ENOENT') {
       log.warn(`Failed to read repos directory: ${e?.message ?? e}`);
@@ -147,8 +144,8 @@ export async function loadAllRepos(): Promise<Array<{ displayName: string; state
   return [];
 }
 
-export async function getActiveRepos(): Promise<Array<{ displayName: string; state: RepoState }>> {
-  const all = await loadOperationalRepos();
+export async function getActiveRepos(preloaded?: RepoEntry[]): Promise<RepoEntry[]> {
+  const all = preloaded ?? await loadOperationalRepos();
   return all.filter(entry => entry.state.active);
 }
 
@@ -160,8 +157,8 @@ export async function activateRepo(state: RepoState, port: number): Promise<void
   await saveRepoByPath(state.path, state);
 }
 
-export async function deactivateAllRepos(): Promise<void> {
-  const all = await loadOperationalRepos();
+export async function deactivateAllRepos(preloaded?: RepoEntry[]): Promise<void> {
+  const all = preloaded ?? await loadOperationalRepos();
   for (const { state } of all) {
     if (state.active) {
       state.active = false;

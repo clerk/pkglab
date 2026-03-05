@@ -58,6 +58,11 @@ export interface PublishEntry {
   rewrittenDeps: Record<string, string>;
 }
 
+export interface RepoEntry {
+  displayName: string;
+  state: RepoState;
+}
+
 export interface DaemonInfo {
   pid: number;
   port: number;

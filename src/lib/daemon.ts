@@ -4,7 +4,7 @@ import type { DaemonInfo } from '../types';
 
 import { loadConfig } from './config';
 import { DaemonAlreadyRunningError } from './errors';
-import { openExclusive, writeAndClose } from './lock';
+import { openExclusive, writeAndClose, isLockStale } from './lock';
 import { log } from './log';
 import { paths } from './paths';
 import { isProcessAlive, run, waitForReady, waitForExit, timeout, gracefulStop, validatePidStartTime } from './proc';
@@ -84,14 +84,9 @@ export async function ensureDaemonRunning(): Promise<DaemonInfo> {
 }
 
 async function waitForDaemon(): Promise<DaemonInfo> {
-  const lockFile = Bun.file(paths.daemonLock);
-  if (await lockFile.exists()) {
-    const content = await lockFile.text();
-    const holderPid = parseInt(content.trim(), 10);
-    if (!isNaN(holderPid) && !isProcessAlive(holderPid)) {
-      await unlink(paths.daemonLock).catch(() => {});
-      return ensureDaemonRunning();
-    }
+  if (await isLockStale(paths.daemonLock)) {
+    await unlink(paths.daemonLock).catch(() => {});
+    return ensureDaemonRunning();
   }
 
   log.info('Waiting for registry to start...');

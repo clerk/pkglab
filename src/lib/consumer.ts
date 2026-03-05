@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import type { PublishPlan, PublishEntry, RepoState } from '../types';
+import type { PublishPlan, PublishEntry, RepoEntry, RepoState } from '../types';
 import type { PackageManager } from './pm-detect';
 
 import { NpmrcConflictError } from './errors';
@@ -652,8 +652,8 @@ export interface RepoWorkItem {
  * Build per-repo work items: which packages to update and the package manager to use.
  * Filters to repos that have at least one package from the plan matching by tag.
  */
-export async function buildConsumerWorkItems(plan: PublishPlan, tag?: string): Promise<RepoWorkItem[]> {
-  const activeRepos = await getActiveRepos();
+export async function buildConsumerWorkItems(plan: PublishPlan, tag?: string, preloadedRepos?: RepoEntry[]): Promise<RepoWorkItem[]> {
+  const activeRepos = await getActiveRepos(preloadedRepos);
   if (activeRepos.length === 0) {
     return [];
   }

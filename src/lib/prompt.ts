@@ -17,16 +17,13 @@ import {
 import figures from '@inquirer/figures';
 import { styleText } from 'node:util';
 
-import type { RepoState } from '../types';
+import type { RepoEntry, RepoState } from '../types';
 
 import { c } from './color';
 import { log } from './log';
 import { loadOperationalRepos } from './repo-state';
 
-export interface RepoChoice {
-  displayName: string;
-  state: RepoState;
-}
+export type RepoChoice = RepoEntry;
 
 interface CheckboxChoice {
   value: string;
