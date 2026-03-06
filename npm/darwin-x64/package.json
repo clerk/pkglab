@@ -1,6 +1,6 @@
 {
   "name": "pkglab-darwin-x64",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "pkglab macOS x64 binary",
   "homepage": "https://github.com/clerk/pkglab",
   "bugs": "https://github.com/clerk/pkglab/issues",

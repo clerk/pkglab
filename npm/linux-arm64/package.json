@@ -1,6 +1,6 @@
 {
   "name": "pkglab-linux-arm64",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "pkglab Linux ARM64 binary",
   "homepage": "https://github.com/clerk/pkglab",
   "bugs": "https://github.com/clerk/pkglab/issues",
