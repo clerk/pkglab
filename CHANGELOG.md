@@ -1,5 +1,44 @@
 # pkglab
 
+## 0.15.1
+
+### Patch Changes
+
+- bc02d57: Add atomicWrite helper (temp file + rename) and use it for repo state, .npmrc, fingerprints, and lockfile patching to prevent corrupt partial writes from concurrent processes
+- 63e4a11: Fix regex lastIndex bug in lockfile sanitization, propagate install errors in verbose mode, handle catalog restore/rollback for freshly-added packages, and use per-package oldVersion for pnpm lockfile patching
+- 9634a4c: Thread pre-loaded active repos from cascade to consumer work builder to avoid stale snapshot
+- 02f69d6: Cross-platform PID validation with Linux /proc fallback, exclusive lock for listener startup, user-specific log directory
+- f5303e3: Harden daemon startup race, stop verification, stderr drain, and PID validation
+- aa3cade: Fix correctness, crash safety, and race condition bugs across commands and core libraries
+
+  - Fix re-add overwriting original version in repo state (add.ts)
+  - Scan peerDependencies and optionalDependencies during version updates (consumer.ts)
+  - Fix npmrc marker removal when markers are out of order (consumer.ts)
+  - Use atomic writes for npmrc modifications (consumer.ts)
+  - Add workspace root fallback for restore command (restore.ts)
+  - Load pnpm default catalog (singular `catalog:`) in workspace discovery (workspace.ts)
+  - Use process.execPath with bunEnv for npm pack fallback in fingerprinting (fingerprint.ts)
+  - Scan pnpm-workspace.yaml catalogs in pre-commit check (check.ts)
+  - Use per-workspace lock paths for listener startup (listener-daemon.ts, listener-ipc.ts)
+  - Drain stderr in listener spawn to prevent pipe buffer deadlock (listener-daemon.ts)
+  - Record daemon startedAt before spawn to avoid PID validation race (daemon.ts)
+  - Clean up socket buffers on listener connection error (listener-core.ts)
+  - Remove unreliable Linux /proc PID validation fallback (proc.ts)
+  - Save repo state after each package restore in down command for crash safety (down.ts)
+  - Acquire publish lock during down restore to prevent races (down.ts)
+  - Stop all listeners globally during down instead of per-workspace (down.ts)
+  - Track successful publishes separately for partial failure dist-tag handling (pub.ts)
+  - Guard against missing repo state entry during consumer updates (pub.ts)
+  - Add bounded concurrency for parallel publishing (publisher.ts)
+  - Replace O(n) queue.shift with O(1) index-based dequeue in toposort (graph.ts)
+
+- 18e9bee: Fix removepkglabBlock loop, check command dep scanning, scope dir cleanup race, publish queue timeout, tarball rollback, and toposort cycle detection
+- d56b09e: Fix publish lock reliability: retry loop for stale lock recovery, fsync PID writes, fix FD leak on write failure
+- 43481b8: Split fingerprint state into per-workspace files under ~/.pkglab/fingerprints/ to eliminate cross-workspace race conditions when multiple workspaces publish concurrently
+- 66576c8: Add timeout option to run() subprocess helper. If a spawned process hangs beyond the deadline, it gets killed and an error is thrown. Applied a 5s timeout to validatePidStartTime to prevent indefinite hangs during daemon status checks.
+- 3ea6304: Simplify repo loading: extract RepoEntry type, deduplicate stale lock check, parallelize existence checks, eliminate redundant disk reads in up command.
+- aea20ef: Add unit test suite with 170 tests covering core lib functions (graph, version, fingerprint classification, publish planning, consumer helpers, args, repo-state)
+
 ## 0.15.0
 
 ### Minor Changes
