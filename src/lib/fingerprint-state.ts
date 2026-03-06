@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 
 import type { FileStat, PackageFingerprint } from './fingerprint';
 import { atomicWrite } from './fs';
@@ -11,8 +11,15 @@ interface FingerprintEntry {
   fileStats?: FileStat[];
 }
 
-// Per-workspace file format: { "@scope/pkg": { "untagged": { hash, version }, "feat1": { hash, version } } }
-type PerWorkspaceFile = Record<string, Record<string, FingerprintEntry>>;
+interface FingerprintMeta {
+  workspaceRoot: string;
+  updatedAt: string;
+}
+
+// Per-workspace file format: { "__meta__": { workspaceRoot, updatedAt }, "@scope/pkg": { "untagged": { hash, version }, "feat1": { hash, version } } }
+type PerWorkspaceFile = Record<string, Record<string, FingerprintEntry>> & {
+  __meta__?: FingerprintMeta;
+};
 
 // Old monolithic format for migration
 type LegacyFingerprintFile = Record<string, Record<string, Record<string, FingerprintEntry>>>;
@@ -79,7 +86,8 @@ export async function loadFingerprintState(workspaceRoot: string, tag: string | 
   const key = tagKey(tag);
   const result: FingerprintMap = {};
   for (const [pkgName, tags] of Object.entries(data)) {
-    const entry = tags[key];
+    if (pkgName === '__meta__') continue;
+    const entry = (tags as Record<string, FingerprintEntry>)[key];
     if (entry) {
       result[pkgName] = entry;
     }
@@ -133,8 +141,67 @@ export async function saveFingerprintState(
     };
   }
 
+  // Write metadata for pruning support
+  data.__meta__ = {
+    workspaceRoot,
+    updatedAt: new Date().toISOString(),
+  };
+
   await mkdir(paths.fingerprintsDir, { recursive: true });
   await atomicWrite(filePath, JSON.stringify(data, null, 2) + '\n');
+}
+
+export interface InspectResult {
+  total: number;
+  stale: number;
+  legacy: number;
+  pruned: number;
+}
+
+export async function inspectFingerprints(opts: { prune: boolean }): Promise<InspectResult> {
+  const result: InspectResult = { total: 0, stale: 0, legacy: 0, pruned: 0 };
+
+  let files: string[];
+  try {
+    files = await readdir(paths.fingerprintsDir);
+  } catch {
+    // Directory doesn't exist, nothing to inspect
+    return result;
+  }
+
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    result.total++;
+
+    const filePath = join(paths.fingerprintsDir, file);
+    let data: PerWorkspaceFile;
+    try {
+      data = await Bun.file(filePath).json();
+    } catch {
+      // Corrupted file, count as legacy (no meta)
+      result.legacy++;
+      continue;
+    }
+
+    const meta = data.__meta__;
+    if (!meta?.workspaceRoot) {
+      result.legacy++;
+      continue;
+    }
+
+    // Check if the workspace root directory still exists
+    try {
+      await stat(meta.workspaceRoot);
+    } catch {
+      result.stale++;
+      if (opts.prune) {
+        await rm(filePath, { force: true });
+        result.pruned++;
+      }
+    }
+  }
+
+  return result;
 }
 
 export async function clearFingerprintState(): Promise<void> {

@@ -6,6 +6,7 @@ import { c } from '../lib/color';
 import { loadConfig } from '../lib/config';
 import { MARKER_START, addRegistryToNpmrc } from '../lib/consumer';
 import { getDaemonStatus } from '../lib/daemon';
+import { inspectFingerprints } from '../lib/fingerprint-state';
 import { log } from '../lib/log';
 import { paths } from '../lib/paths';
 import { BACKUP_SUFFIX } from '../lib/publisher';
@@ -17,6 +18,11 @@ export default defineCommand({
     lockfile: {
       type: 'boolean',
       description: 'Sanitize bun.lock files in consumer repos by removing localhost URLs',
+      default: false,
+    },
+    prune: {
+      type: 'boolean',
+      description: 'Remove stale fingerprint files for workspaces that no longer exist on disk',
       default: false,
     },
   },
@@ -146,6 +152,27 @@ export default defineCommand({
       log.line(`    These are original package.json files from a crashed publish.`);
       log.line(`    Run ${c.cyan('pkglab pub')} again to auto-recover, or rename them back manually.`);
       issues += backups.length;
+    }
+
+    // Check fingerprint files
+    const fp = await inspectFingerprints({ prune: args.prune });
+    if (fp.total > 0) {
+      if (fp.stale === 0 && fp.legacy === 0) {
+        log.line(`  ${c.green('✓')} Fingerprints: ${fp.total} file${fp.total !== 1 ? 's' : ''}, all clean`);
+      } else {
+        if (fp.legacy > 0) {
+          log.line(`  ${c.yellow('!')} Fingerprints: ${fp.legacy} legacy file${fp.legacy !== 1 ? 's' : ''} (missing metadata)`);
+        }
+        if (fp.stale > 0 && !args.prune) {
+          log.line(
+            `  ${c.yellow('!')} Fingerprints: ${fp.stale} stale file${fp.stale !== 1 ? 's' : ''} (workspace no longer exists)`,
+          );
+          log.line(`    Run: ${c.cyan('pkglab doctor --prune')} to remove them`);
+        }
+        if (fp.pruned > 0) {
+          log.line(`  ${c.green('✓')} Fingerprints: pruned ${fp.pruned} stale file${fp.pruned !== 1 ? 's' : ''}`);
+        }
+      }
     }
 
     if (issues === 0) {
