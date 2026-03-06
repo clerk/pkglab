@@ -5,6 +5,8 @@
  * registry process can coordinate publishes for many workspaces.
  */
 
+import type pino from 'pino';
+
 const PUBLISH_TIMEOUT = parseInt(process.env.PKGLAB_PUB_TIMEOUT ?? '120000', 10);
 
 interface Lane {
@@ -51,15 +53,30 @@ export interface WorkspaceStatus {
   lanes: LaneStatus[];
 }
 
-let logFd: number | undefined;
+let fileLogger: pino.Logger | undefined;
+let logDest: pino.DestinationStream | undefined;
 
-export function setLogFd(fd: number): void {
-  logFd = fd;
+export function setLogDestination(logger: pino.Logger, dest: pino.DestinationStream): void {
+  fileLogger = logger;
+  logDest = dest;
 }
 
-function formatTimestamp(): string {
-  return '[' + new Date().toLocaleTimeString('en-GB', { hour12: false }) + ']';
-}
+const queueLog = {
+  info(msg: string, extra?: Record<string, unknown>) {
+    if (fileLogger) {
+      fileLogger.info({ component: 'publish-queue', ...extra }, msg);
+    } else {
+      console.log(msg);
+    }
+  },
+  error(msg: string, extra?: Record<string, unknown>) {
+    if (fileLogger) {
+      fileLogger.error({ component: 'publish-queue', ...extra }, msg);
+    } else {
+      console.error(msg);
+    }
+  },
+};
 
 let jobCounter = 0;
 
@@ -115,11 +132,11 @@ export function enqueuePublish(req: PublishRequest): QueueResult {
   const names = req.targets.length > 0 ? req.targets.join(', ') : '(root)';
   const tagLabel = tag ? ` [${tag}]` : '';
   if (coalesced) {
-    console.log(`${formatTimestamp()} Ping: ${names}${tagLabel} (queued, publish in progress)`);
+    queueLog.info(`Ping: ${names}${tagLabel} (queued, publish in progress)`, { jobId, tag: tag || undefined });
   } else if (ws.debounceTimer) {
-    console.log(`${formatTimestamp()} Ping: ${names}${tagLabel} (debounced)`);
+    queueLog.info(`Ping: ${names}${tagLabel} (debounced)`, { jobId, tag: tag || undefined });
   } else {
-    console.log(`${formatTimestamp()} Ping: ${names}${tagLabel}`);
+    queueLog.info(`Ping: ${names}${tagLabel}`, { jobId, tag: tag || undefined });
   }
 
   if (!ws.publishing) {
@@ -139,6 +156,8 @@ export function enqueuePublish(req: PublishRequest): QueueResult {
 
 async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<void> {
   ws.publishing = true;
+  const runId = crypto.randomUUID();
+
   try {
     while (true) {
       // Find next lane with pending work
@@ -187,19 +206,58 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       if (useShallow) cmd.push('--shallow');
       if (useDryRun) cmd.push('--dry-run');
 
-      console.log(`${formatTimestamp()} Publishing${activeTag ? ` [${activeTag}]` : ''}...`);
+      queueLog.info(`Publishing${activeTag ? ` [${activeTag}]` : ''}...`, { runId, tag: activeTag || undefined });
       if (names.length > 0 && !useRoot) {
-        console.log(`  ${names.join(', ')}`);
+        queueLog.info(`  ${names.join(', ')}`, { runId });
       }
+
+      const env: Record<string, string> = { ...process.env as Record<string, string>, PKGLAB_RUN_ID: runId };
 
       const proc = Bun.spawn(cmd, {
         cwd: workspaceRoot,
-        stdout: logFd ?? 'inherit',
-        stderr: logFd ?? 'inherit',
+        stdout: logDest ? 'pipe' : 'inherit',
+        stderr: logDest ? 'pipe' : 'inherit',
+        env,
       });
 
+      // Pipe child stdout/stderr into the log file if available
+      if (logDest && proc.stdout) {
+        const reader = proc.stdout.getReader();
+        (async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) {
+                const text = new TextDecoder().decode(value);
+                for (const line of text.split('\n').filter(Boolean)) {
+                  queueLog.info(line, { runId, source: 'pub-stdout' });
+                }
+              }
+            }
+          } catch {}
+        })();
+      }
+      if (logDest && proc.stderr) {
+        const reader = proc.stderr.getReader();
+        (async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (value) {
+                const text = new TextDecoder().decode(value);
+                for (const line of text.split('\n').filter(Boolean)) {
+                  queueLog.error(line, { runId, source: 'pub-stderr' });
+                }
+              }
+            }
+          } catch {}
+        })();
+      }
+
       const timer = setTimeout(() => {
-        console.error(`${formatTimestamp()} Publish timed out after ${PUBLISH_TIMEOUT}ms, killing...`);
+        queueLog.error(`Publish timed out after ${PUBLISH_TIMEOUT}ms, killing...`, { runId });
         proc.kill();
         setTimeout(() => { try { proc.kill(9); } catch {} }, 5000);
       }, PUBLISH_TIMEOUT);
@@ -207,9 +265,9 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       const exitCode = await proc.exited;
       clearTimeout(timer);
       if (exitCode !== 0) {
-        console.error(`${formatTimestamp()} Publish failed (exit ${exitCode})`);
+        queueLog.error(`Publish failed (exit ${exitCode})`, { runId });
       } else {
-        console.log(`${formatTimestamp()} Publish complete`);
+        queueLog.info(`Publish complete`, { runId });
       }
     }
   } finally {
