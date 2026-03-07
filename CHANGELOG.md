@@ -1,5 +1,12 @@
 # pkglab
 
+## 0.16.0
+
+### Minor Changes
+
+- abc9564: feat: add fingerprint file pruning to doctor command
+- 76863f6: feat: structured logging with pino for registry events
+
 ## 0.15.1
 
 ### Patch Changes
