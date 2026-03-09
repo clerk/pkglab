@@ -16,18 +16,6 @@ function getFormat(): 'pretty' | 'json' {
   return isTTY() ? 'pretty' : 'json';
 }
 
-function buildPrettyTransport() {
-  return {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      ignore: 'pid,hostname',
-      messageFormat: '{msg}',
-      customPrettifiers: {},
-    },
-  };
-}
-
 function createPinoLogger(opts?: { destination?: pino.DestinationStream }) {
   const format = getFormat();
   const baseOpts: pino.LoggerOptions = {
@@ -42,12 +30,9 @@ function createPinoLogger(opts?: { destination?: pino.DestinationStream }) {
   };
 
   if (format === 'pretty' && !opts?.destination) {
-    // Pretty format with colored prefixes, bypass pino-pretty for simpler output
-    // that matches the current CLI look
-    return pino({
-      ...baseOpts,
-      transport: buildPrettyTransport(),
-    });
+    // Pretty mode uses console.log wrappers (makePrettyLogger), not pino output.
+    // Don't use pino transport here: pino-pretty can't be resolved in compiled binary.
+    return pino(baseOpts);
   }
 
   if (opts?.destination) {
