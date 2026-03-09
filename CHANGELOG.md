@@ -1,5 +1,11 @@
 # pkglab
 
+## 0.16.1
+
+### Patch Changes
+
+- 8abbbbd: Fix compiled binary crash caused by pino-pretty transport resolution
+
 ## 0.16.0
 
 ### Minor Changes
