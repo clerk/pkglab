@@ -98,9 +98,13 @@ export async function runCascade(
   // Active repos = filter dependents to only packages consumers have installed.
   const consumedPackages = new Set<string>();
   const activeRepos = await getActiveRepos();
+  const pubTag = tag ?? null;
   for (const { state } of activeRepos) {
-    for (const pkgName of Object.keys(state.packages)) {
-      consumedPackages.add(pkgName);
+    for (const [pkgName, link] of Object.entries(state.packages)) {
+      const linkTag = link.tag ?? null;
+      if (linkTag === pubTag) {
+        consumedPackages.add(pkgName);
+      }
     }
   }
 

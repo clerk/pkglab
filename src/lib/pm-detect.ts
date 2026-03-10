@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
 import { log } from './log';
-import { run } from './proc';
+import { runPm } from './proc';
 
 export type PackageManager = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
@@ -53,18 +53,18 @@ export async function detectPackageManager(startDir: string): Promise<PackageMan
 
 export async function runInstall(repoPath: string, opts?: { label?: string }): Promise<boolean> {
   const pm = await detectPackageManager(repoPath);
-  const cmd: string[] = [pm, 'install', '--ignore-scripts'];
+  const args: string[] = ['install', '--ignore-scripts'];
   if (pm === 'pnpm' || pm === 'bun') {
-    cmd.push('--prefer-offline');
+    args.push('--prefer-offline');
   }
-  log.dim(`  ${cmd.join(' ')}`);
-  let result = await run(cmd, { cwd: repoPath });
+  log.dim(`  ${pm} ${args.join(' ')}`);
+  let result = await runPm(pm, args, { cwd: repoPath });
 
   // Fallback without --ignore-scripts if the fast path failed
   if (result.exitCode !== 0) {
-    const fallback = cmd.filter(a => a !== '--ignore-scripts');
-    log.dim(`  Retrying: ${fallback.join(' ')}`);
-    result = await run(fallback, { cwd: repoPath });
+    const fallbackArgs = args.filter(a => a !== '--ignore-scripts');
+    log.dim(`  Retrying: ${pm} ${fallbackArgs.join(' ')}`);
+    result = await runPm(pm, fallbackArgs, { cwd: repoPath });
   }
 
   if (result.exitCode !== 0) {

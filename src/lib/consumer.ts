@@ -8,7 +8,7 @@ import { atomicWrite } from './fs';
 import { patchPnpmLockfile } from './lockfile-patch';
 import { log } from './log';
 import { detectPackageManager } from './pm-detect';
-import { run } from './proc';
+import { pmCommand, run } from './proc';
 import { getActiveRepos } from './repo-state';
 
 export type { LockfilePatchEntry } from './lockfile-patch';
@@ -402,12 +402,17 @@ export async function installWithVersionUpdates(
   // overrides .npmrc (env vars > project .npmrc in npm's config precedence), so
   // the registry URL pkglab writes to .npmrc gets ignored. Strip npm_config_registry
   // and set it explicitly to our local registry when a registryUrl is provided.
-  let installEnv: Record<string, string | undefined> | undefined;
+  let registryEnv: Record<string, string | undefined> | undefined;
   if (opts.registryUrl) {
-    const env: Record<string, string | undefined> = { ...process.env };
-    delete env.npm_config_registry;
-    env.npm_config_registry = opts.registryUrl;
-    installEnv = env;
+    registryEnv = { npm_config_registry: opts.registryUrl };
+  }
+
+  // Build command + env using pmCommand so bun routes through process.execPath + BUN_BE_BUN
+  const { cmd: installCmd, env: baseEnv } = pmCommand(pm, baseArgs, registryEnv);
+  // Strip inherited npm_config_registry when we're overriding it
+  if (opts.registryUrl) {
+    delete baseEnv.npm_config_registry;
+    baseEnv.npm_config_registry = opts.registryUrl;
   }
 
   // Step 4: disable bun manifest cache if needed
@@ -418,12 +423,13 @@ export async function installWithVersionUpdates(
     onCommand?.([pm, ...baseArgs], cwd);
 
     // Step 6: run install (fast path with --ignore-scripts unless noPmOptimizations)
-    let result = await run([pm, ...baseArgs], { cwd, env: installEnv });
+    let result = await run(installCmd, { cwd, env: baseEnv });
 
     // Step 6b: fallback without --ignore-scripts if the fast path failed
     if (!opts.noPmOptimizations && result.exitCode !== 0) {
       const fallbackArgs = baseArgs.filter(a => a !== '--ignore-scripts');
-      result = await run([pm, ...fallbackArgs], { cwd, env: installEnv });
+      const { cmd: fallbackCmd } = pmCommand(pm, fallbackArgs);
+      result = await run(fallbackCmd, { cwd, env: baseEnv });
     }
 
     // Step 6: rollback on failure

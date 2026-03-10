@@ -39,7 +39,7 @@ export default defineCommand({
       throw new CommandError('Cannot combine --scope with package names. Use one or the other.');
     }
 
-    const repoPath = await canonicalRepoPath(process.cwd());
+    let repoPath = await canonicalRepoPath(process.cwd());
     let repo = await findRepoByPath(repoPath);
 
     // Fallback: cwd might be a subdirectory, try workspace root
@@ -48,6 +48,7 @@ export default defineCommand({
       if (ws.root !== repoPath) {
         const wsPath = await canonicalRepoPath(ws.root);
         repo = await findRepoByPath(wsPath);
+        if (repo) repoPath = wsPath;
       }
     }
 

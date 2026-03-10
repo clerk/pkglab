@@ -204,6 +204,31 @@ export async function inspectFingerprints(opts: { prune: boolean }): Promise<Ins
   return result;
 }
 
+export async function removePackageFromFingerprints(packageName: string): Promise<void> {
+  let files: string[];
+  try {
+    files = await readdir(paths.fingerprintsDir);
+  } catch {
+    return;
+  }
+
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    const filePath = join(paths.fingerprintsDir, file);
+    let data: PerWorkspaceFile;
+    try {
+      data = await Bun.file(filePath).json();
+    } catch {
+      continue;
+    }
+
+    if (!(packageName in data)) continue;
+
+    delete data[packageName];
+    await atomicWrite(filePath, JSON.stringify(data, null, 2) + '\n');
+  }
+}
+
 export async function clearFingerprintState(): Promise<void> {
   // Remove the per-workspace fingerprints directory
   await rm(paths.fingerprintsDir, { recursive: true, force: true });

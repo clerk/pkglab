@@ -52,6 +52,40 @@ export async function run(cmd: string[], options: RunOptions = {}): Promise<RunR
   return { stdout, stderr, exitCode };
 }
 
+/**
+ * Build command + env for a package manager invocation.
+ * When pm is 'bun', routes through process.execPath with BUN_BE_BUN=1.
+ * For other PMs (pnpm, npm, yarn), uses the system binary directly.
+ */
+export function pmCommand(
+  pm: string,
+  args: string[],
+  extraEnv?: Record<string, string | undefined>,
+): { cmd: string[]; env: Record<string, string | undefined> } {
+  if (pm === 'bun') {
+    return {
+      cmd: [process.execPath, ...args],
+      env: { ...bunEnv(), ...extraEnv },
+    };
+  }
+  return {
+    cmd: [pm, ...args],
+    env: { ...process.env, ...extraEnv },
+  };
+}
+
+/**
+ * Run a package manager command. Handles BUN_BE_BUN for compiled binary mode.
+ */
+export async function runPm(
+  pm: string,
+  args: string[],
+  opts?: RunOptions,
+): Promise<RunResult> {
+  const { cmd, env } = pmCommand(pm, args);
+  return run(cmd, { ...opts, env: { ...env, ...opts?.env } });
+}
+
 export function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);

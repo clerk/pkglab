@@ -46,14 +46,17 @@ export default defineCommand({
       }
     }
 
-    const removed = results.filter(r => r.ok).length;
-    if (removed > 0) {
-      log.success(`Removed ${removed} package${removed !== 1 ? 's' : ''}`);
+    const removedResults = results.filter(r => r.ok);
+    if (removedResults.length > 0) {
+      log.success(`Removed ${removedResults.length} package${removedResults.length !== 1 ? 's' : ''}`);
     }
 
     if (args.all) {
       const { clearFingerprintState } = await import('../../lib/fingerprint-state');
       await clearFingerprintState();
+    } else if (removedResults.length > 0) {
+      const { removePackageFromFingerprints } = await import('../../lib/fingerprint-state');
+      await Promise.all(removedResults.map(r => removePackageFromFingerprints(r.name)));
     }
   },
 });
