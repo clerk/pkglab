@@ -189,7 +189,10 @@ async function publishSinglePackage(
   } finally {
     // Restore original package.json
     await rm(pkgJsonPath, { force: true }).catch(() => {});
-    await rename(backupPath, pkgJsonPath).catch(() => {});
+    await rename(backupPath, pkgJsonPath).catch(err => {
+      log.error(`Failed to restore package.json from backup at ${backupPath}: ${err}`);
+      log.error(`Original package.json may need manual recovery from ${backupPath}`);
+    });
   }
 }
 
@@ -215,8 +218,11 @@ function resolveCatalogProtocol(
   if (!catalogName && catalogs['default']?.[pkgName]) {
     return catalogs['default'][pkgName];
   }
-  log.warn(`Could not resolve ${spec} for ${pkgName}, using *`);
-  return '*';
+  throw new Error(
+    `Could not resolve ${spec} for ${pkgName}. ` +
+      `The catalog entry is missing or the catalog name is invalid. ` +
+      `Check the workspace root catalog configuration.`,
+  );
 }
 
 function resolveWorkspaceProtocol(spec: string): string {

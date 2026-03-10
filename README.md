@@ -179,7 +179,7 @@ A standalone registry gives you half the picture, but you still have to manage t
 
 When you publish, packages go through a real `bun publish` to this local registry. Exports maps, bundled dependencies, the `"files"` array, all validated through the same publish flow your users will get. Consumer repos install from this registry with a standard `npm install` / `pnpm add`, producing the same `node_modules` tree your users will get. One copy of React. Correct peer dependency resolution. Real lock file entries.
 
-On top of that, `pkglab` handles automatic consumer updates, dependency cascading, parallel publishes with rollback, `.npmrc` protection, pre-commit checks, version pruning, and multi-worktree tag isolation. See [Features](#features) for the full list.
+On top of that, `pkglab` handles automatic consumer updates, dependency cascading, parallel publishes with retry, `.npmrc` protection, pre-commit checks, version pruning, and multi-worktree tag isolation. See [Features](#features) for the full list.
 
 The registry server starts in ~60ms, uses ~44MB of memory, and publishes 22 packages in about 1 second. See [Performance](#performance) for full benchmark results.
 

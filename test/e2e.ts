@@ -1212,6 +1212,269 @@ try {
     await pkglab(['repo', 'reset', '--stale']).catch(() => {});
   }
 
+  // === Audit fix verification tests ===
+
+  // A1. Fingerprint negation patterns: files matching !pattern are excluded
+  heading('A1. Fingerprint negation patterns');
+  {
+    const negDir = join(testDir, 'negation-test');
+    await mkdir(join(negDir, 'packages/neg-pkg/dist/internal'), { recursive: true });
+
+    await writeJson(join(negDir, 'package.json'), {
+      name: 'negation-workspace',
+      private: true,
+      workspaces: ['packages/*'],
+    });
+
+    await writeJson(join(negDir, 'packages/neg-pkg/package.json'), {
+      name: '@test/neg-pkg',
+      version: '1.0.0',
+      files: ['dist', '!dist/internal'],
+    });
+
+    // Create files: dist/index.js (included) and dist/internal/secret.js (excluded)
+    await Bun.write(join(negDir, 'packages/neg-pkg/dist/index.js'), 'export const x = 1;\n');
+    await Bun.write(join(negDir, 'packages/neg-pkg/dist/internal/secret.js'), 'secret\n');
+
+    // First publish using cascade path to establish fingerprint state
+    const r1 = await pkglab(['pub', '@test/neg-pkg'], { cwd: negDir });
+    assert(r1.code === 0, 'pub with negation files succeeds');
+
+    // Change the excluded file only
+    await Bun.write(join(negDir, 'packages/neg-pkg/dist/internal/secret.js'), 'modified secret\n');
+
+    // Second publish should detect no changes (excluded file changed)
+    const r2 = await pkglab(['pub', '@test/neg-pkg'], { cwd: negDir });
+    assert(r2.code === 0, 'pub after excluded file change succeeds');
+    assert(
+      r2.stdout.includes('unchanged') || r2.stdout.includes('Nothing to publish'),
+      'excluded file change does not trigger republish',
+      r2,
+    );
+
+    // Change the included file
+    await Bun.write(join(negDir, 'packages/neg-pkg/dist/index.js'), 'export const x = 2;\n');
+
+    // Third publish should detect changes
+    const r3 = await pkglab(['pub', '@test/neg-pkg'], { cwd: negDir });
+    assert(r3.code === 0, 'pub after included file change succeeds');
+
+    // Clean up
+    await pkglab(['pkg', 'rm', '@test/neg-pkg']).catch(() => {});
+  }
+
+  // A2. .gitignore applied when no files field
+  heading('A2. gitignore applied when no files field');
+  {
+    const ignoreDir = join(testDir, 'ignore-test');
+    await mkdir(join(ignoreDir, 'packages/ign-pkg/dist'), { recursive: true });
+    await mkdir(join(ignoreDir, 'packages/ign-pkg/coverage'), { recursive: true });
+
+    await writeJson(join(ignoreDir, 'package.json'), {
+      name: 'ignore-workspace',
+      private: true,
+      workspaces: ['packages/*'],
+    });
+
+    // Package without files field but with .gitignore
+    await writeJson(join(ignoreDir, 'packages/ign-pkg/package.json'), {
+      name: '@test/ign-pkg',
+      version: '1.0.0',
+    });
+    await Bun.write(join(ignoreDir, 'packages/ign-pkg/.gitignore'), 'coverage\n');
+    await Bun.write(join(ignoreDir, 'packages/ign-pkg/dist/index.js'), 'export const x = 1;\n');
+    await Bun.write(join(ignoreDir, 'packages/ign-pkg/coverage/report.html'), '<html>coverage</html>\n');
+
+    // First publish using cascade path to establish fingerprint state
+    const r1 = await pkglab(['pub', '@test/ign-pkg'], { cwd: ignoreDir });
+    assert(r1.code === 0, 'pub with gitignore succeeds');
+
+    // Change only the ignored file
+    await Bun.write(join(ignoreDir, 'packages/ign-pkg/coverage/report.html'), '<html>updated</html>\n');
+
+    // Should not trigger republish
+    const r2 = await pkglab(['pub', '@test/ign-pkg'], { cwd: ignoreDir });
+    assert(r2.code === 0, 'pub after ignored file change succeeds');
+    assert(
+      r2.stdout.includes('unchanged') || r2.stdout.includes('Nothing to publish'),
+      'gitignored file change does not trigger republish',
+      r2,
+    );
+
+    await pkglab(['pkg', 'rm', '@test/ign-pkg']).catch(() => {});
+  }
+
+  // A3. Catalog resolution failure throws instead of degrading to *
+  heading('A3. Catalog resolution throws on missing entry');
+  {
+    const catDir = join(testDir, 'catalog-err-test');
+    await mkdir(join(catDir, 'packages/cat-pkg'), { recursive: true });
+
+    await writeJson(join(catDir, 'package.json'), {
+      name: 'catalog-err-workspace',
+      private: true,
+      workspaces: ['packages/*'],
+      catalog: {
+        '@test/known-dep': '^1.0.0',
+      },
+    });
+
+    // Package with a catalog: reference to a dep that's NOT in the catalog
+    await writeJson(join(catDir, 'packages/cat-pkg/package.json'), {
+      name: '@test/cat-pkg',
+      version: '1.0.0',
+      dependencies: {
+        '@test/unknown-catalog-dep': 'catalog:nonexistent',
+      },
+    });
+
+    await Bun.write(join(catDir, 'packages/cat-pkg/index.js'), 'export default 1;\n');
+
+    const r = await pkglab(['pub', '--single', '@test/cat-pkg'], { cwd: catDir });
+    assert(r.code !== 0, 'pub fails when catalog entry cannot be resolved');
+    const output = r.stdout + r.stderr;
+    assert(
+      output.includes('Could not resolve catalog:nonexistent'),
+      'error message mentions unresolvable catalog',
+      r,
+    );
+
+    await pkglab(['pkg', 'rm', '@test/cat-pkg']).catch(() => {});
+  }
+
+  // A4. Publisher backup restore logs on failure (verified by checking the backup code path works)
+  heading('A4. Publisher backup recovery on next publish');
+  {
+    // Create a leftover .pkglab backup to simulate a crashed publish
+    const backupDir = join(testDir, 'backup-test');
+    await mkdir(join(backupDir, 'packages/bak-pkg'), { recursive: true });
+
+    await writeJson(join(backupDir, 'package.json'), {
+      name: 'backup-workspace',
+      private: true,
+      workspaces: ['packages/*'],
+    });
+
+    const originalPkgJson = {
+      name: '@test/bak-pkg',
+      version: '1.0.0',
+    };
+    await writeJson(join(backupDir, 'packages/bak-pkg/package.json'), originalPkgJson);
+
+    // Simulate a crashed publish by leaving a .pkglab backup
+    await writeJson(join(backupDir, 'packages/bak-pkg/package.json.pkglab'), originalPkgJson);
+    // Write a modified package.json (as if mid-publish)
+    await writeJson(join(backupDir, 'packages/bak-pkg/package.json'), {
+      ...originalPkgJson,
+      version: '0.0.0-pkglab.999999',
+    });
+
+    await Bun.write(join(backupDir, 'packages/bak-pkg/index.js'), 'export default 1;\n');
+
+    // Publishing should recover the backup first, then publish normally
+    const r = await pkglab(['pub', '--single', '@test/bak-pkg'], { cwd: backupDir });
+    assert(r.code === 0, 'pub recovers from leftover backup and succeeds');
+
+    // After publish, original package.json should be restored (not the mid-publish version)
+    const pkg = await readPkgJson(join(backupDir, 'packages/bak-pkg'));
+    assert(pkg.version === '1.0.0', 'original package.json version restored after publish');
+
+    // No leftover backup
+    const backupExists = await Bun.file(join(backupDir, 'packages/bak-pkg/package.json.pkglab')).exists();
+    assert(!backupExists, 'no leftover .pkglab backup after publish');
+
+    await pkglab(['pkg', 'rm', '@test/bak-pkg']).catch(() => {});
+  }
+
+  // A5. skip-worktree notice mentions pre-commit hook, not skip-worktree
+  heading('A5. NPMRC notice mentions pre-commit hook');
+  {
+    const noticeDir = join(testDir, 'notice-test');
+    await mkdir(noticeDir, { recursive: true });
+
+    await writeJson(join(noticeDir, 'package.json'), {
+      name: 'notice-test-consumer',
+      version: '1.0.0',
+      dependencies: {},
+    });
+
+    const bunProc = Bun.spawn(['bun', 'install'], {
+      cwd: noticeDir,
+      stdout: 'ignore',
+      stderr: 'ignore',
+    });
+    await bunProc.exited;
+
+    const r = await pkglab(['add', '@test/pkg-a'], { cwd: noticeDir });
+    assert(r.code === 0, 'pkglab add succeeds for notice test');
+
+    const output = r.stdout + r.stderr;
+    assert(!output.includes('skip-worktree'), 'notice does NOT mention skip-worktree');
+    assert(output.includes('pre-commit hook'), 'notice mentions pre-commit hook');
+
+    // Cleanup
+    await pkglab(['restore', '--all'], { cwd: noticeDir }).catch(() => {});
+    await pkglab(['repo', 'reset', '--stale']).catch(() => {});
+  }
+
+  // A6. README says "retry" not "rollback"
+  heading('A6. README uses "retry" not "rollback"');
+  {
+    const { readFileSync } = await import('node:fs');
+    const readmePath = resolve(import.meta.dir, '..', 'README.md');
+    const readmeContent = readFileSync(readmePath, 'utf-8');
+    assert(
+      readmeContent.includes('parallel publishes with retry'),
+      'README says "parallel publishes with retry"',
+    );
+    assert(
+      !readmeContent.includes('parallel publishes with rollback'),
+      'README does NOT say "parallel publishes with rollback"',
+    );
+    console.log('  pass: README rollback claim fixed');
+    passed++;
+  }
+
+  // A7. Pending update state saved before consumer install
+  heading('A7. Pending update state and crash recovery');
+  {
+    // We can't easily simulate a crash mid-install, but we can verify:
+    // 1. After a successful pub with consumer updates, pendingUpdate is cleared
+    // 2. The repo state module correctly handles the pendingUpdate field
+
+    // Ensure consumer-2 is still active with @test/pkg-a
+    const c2State = await Bun.file(join(testDir, 'consumer-2/package.json')).json();
+    const c2HasPkg = !!getDep(c2State, '@test/pkg-a');
+
+    if (c2HasPkg) {
+      // Touch a file to force republish
+      await Bun.write(join(producerDir, 'packages/pkg-a/index.js'), '// pending test\n');
+      const r = await pkglab(['pub'], { cwd: producerDir });
+      assert(r.code === 0, 'pub succeeds for pending state test');
+
+      // Load repo state and verify pendingUpdate is cleared
+      const { loadRepoByPath } = await import('../src/lib/repo-state');
+      const consumer2Path = resolve(consumer2Dir);
+      const state = await loadRepoByPath(consumer2Path);
+      assert(state !== null, 'consumer-2 repo state exists');
+      assert(!state!.pendingUpdate, 'pendingUpdate is cleared after successful install');
+    } else {
+      // Re-add and test
+      const addR = await pkglab(['add', '@test/pkg-a@feat1'], { cwd: consumer2Dir });
+      assert(addR.code === 0, 're-add pkg-a to consumer-2 for pending test');
+
+      await Bun.write(join(producerDir, 'packages/pkg-a/index.js'), '// pending test 2\n');
+      const r = await pkglab(['pub', '-t', 'feat1'], { cwd: producerDir });
+      assert(r.code === 0, 'pub succeeds for pending state test');
+
+      const { loadRepoByPath } = await import('../src/lib/repo-state');
+      const consumer2Path = resolve(consumer2Dir);
+      const state = await loadRepoByPath(consumer2Path);
+      assert(state !== null, 'consumer-2 repo state exists');
+      assert(!state!.pendingUpdate, 'pendingUpdate is cleared after successful install');
+    }
+  }
+
   heading('Results');
   console.log(`  ${passed} passed, ${failed} failed`);
 } finally {

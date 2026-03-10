@@ -30,39 +30,54 @@ async function collectPublishFiles(packageDir: string, pkgJson: Record<string, a
   const fileSet = new Set<string>();
 
   if (pkgJson.files && Array.isArray(pkgJson.files)) {
-    // If any entry uses negation patterns, fall back to a full walk since
-    // Bun.Glob doesn't model npm's negation semantics.
-    const hasNegation = pkgJson.files.some((p: string) => p.startsWith('!'));
+    const positivePatterns = (pkgJson.files as string[]).filter((p: string) => !p.startsWith('!'));
+    const negationPatterns = (pkgJson.files as string[]).filter((p: string) => p.startsWith('!')).map((p: string) => p.slice(1));
 
-    if (hasNegation) {
-      const glob = new Bun.Glob('**');
-      for await (const match of glob.scan({ cwd: packageDir, onlyFiles: true })) {
-        if (match.startsWith('node_modules/') || match.startsWith('.git/') || match.startsWith('.turbo/')) {
-          continue;
-        }
+    // Collect files matching positive patterns
+    for (const pattern of positivePatterns) {
+      const fileGlob = new Bun.Glob(pattern.endsWith('/') ? pattern + '**' : pattern);
+      for await (const match of fileGlob.scan({ cwd: packageDir, onlyFiles: true })) {
         fileSet.add(match);
       }
-    } else {
-      for (const pattern of pkgJson.files as string[]) {
-        // Glob as a file match
-        const fileGlob = new Bun.Glob(pattern.endsWith('/') ? pattern + '**' : pattern);
-        for await (const match of fileGlob.scan({ cwd: packageDir, onlyFiles: true })) {
+      // Also treat bare names as possible directories
+      if (!pattern.includes('*') && !pattern.endsWith('/')) {
+        const dirGlob = new Bun.Glob(pattern + '/**');
+        for await (const match of dirGlob.scan({ cwd: packageDir, onlyFiles: true })) {
           fileSet.add(match);
         }
-        // Also treat bare names as possible directories
-        if (!pattern.includes('*') && !pattern.endsWith('/')) {
-          const dirGlob = new Bun.Glob(pattern + '/**');
-          for await (const match of dirGlob.scan({ cwd: packageDir, onlyFiles: true })) {
-            fileSet.add(match);
+      }
+    }
+
+    // Apply negation patterns: remove files matching !pattern entries
+    if (negationPatterns.length > 0) {
+      for (const neg of negationPatterns) {
+        const negGlob = new Bun.Glob(neg);
+        for (const file of fileSet) {
+          if (negGlob.match(file)) {
+            fileSet.delete(file);
+          }
+        }
+        // Also match as directory (e.g. "dist/internal" excludes "dist/internal/foo.js")
+        if (!neg.includes('*') && !neg.endsWith('/')) {
+          const dirGlob = new Bun.Glob(neg + '/**');
+          for (const file of fileSet) {
+            if (dirGlob.match(file)) {
+              fileSet.delete(file);
+            }
           }
         }
       }
     }
   } else {
-    // No files field: include everything minus common exclusions
+    // No files field: include everything minus common exclusions.
+    // Apply .npmignore (or .gitignore if no .npmignore) like npm does.
+    const ignorePatterns = await loadIgnorePatterns(packageDir);
     const glob = new Bun.Glob('**');
     for await (const match of glob.scan({ cwd: packageDir, onlyFiles: true })) {
       if (match.startsWith('node_modules/') || match.startsWith('.git/') || match.startsWith('.turbo/')) {
+        continue;
+      }
+      if (ignorePatterns.length > 0 && matchesAnyPattern(match, ignorePatterns)) {
         continue;
       }
       fileSet.add(match);
@@ -102,6 +117,41 @@ async function collectPublishFiles(packageDir: string, pkgJson: Record<string, a
   }
 
   return [...fileSet].toSorted();
+}
+
+// Load ignore patterns from .npmignore (preferred) or .gitignore.
+// Returns glob patterns to exclude. Comments and blank lines are stripped.
+async function loadIgnorePatterns(packageDir: string): Promise<string[]> {
+  // .npmignore takes precedence over .gitignore (npm behavior)
+  for (const file of ['.npmignore', '.gitignore']) {
+    const f = Bun.file(join(packageDir, file));
+    if (await f.exists()) {
+      const content = await f.text();
+      return content
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith('#') && !line.startsWith('!'));
+    }
+  }
+  return [];
+}
+
+// Check if a file path matches any of the ignore patterns.
+function matchesAnyPattern(filePath: string, patterns: string[]): boolean {
+  for (const pattern of patterns) {
+    const glob = new Bun.Glob(pattern);
+    if (glob.match(filePath)) {
+      return true;
+    }
+    // Also match as directory prefix (e.g. "dist" should match "dist/foo.js")
+    if (!pattern.includes('*') && !pattern.includes('/')) {
+      const dirGlob = new Bun.Glob(pattern + '/**');
+      if (dirGlob.match(filePath)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Walk the exports map recursively, collecting relative file paths

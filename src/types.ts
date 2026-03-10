@@ -28,6 +28,16 @@ export interface RepoState {
   active: boolean;
   lastUsed?: number;
   packages: Record<string, PackageLink>;
+  /** Set before consumer install, cleared after success. Allows crash recovery. */
+  pendingUpdate?: PendingUpdate;
+}
+
+export interface PendingUpdate {
+  /** Packages being updated: name -> previous version entries */
+  packages: Record<string, Array<{ dir: string; original: string }>>;
+  /** Catalog entries being updated: name -> previous version */
+  catalogs?: Record<string, { catalogName: string; catalogFormat?: 'package-json' | 'pnpm-workspace'; original: string }>;
+  timestamp: number;
 }
 
 export interface PackageLink {

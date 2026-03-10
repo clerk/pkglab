@@ -106,15 +106,15 @@ This redirects all package resolution through Verdaccio. Packages published to p
 
 Conflict handling: if `.npmrc` already has a `registry=` line (e.g. pointing to a corporate proxy), pkglab errors with a clear message. A future release will add a compatibility mode flag for these setups.
 
-Git safety: pkglab runs `git update-index --skip-worktree .npmrc` after modifying it. The pkglab registry lines exist locally but git ignores them — they won't appear in `git status`, diffs, or get staged accidentally. `pkglab rm` removes the lines and clears the flag. `pkglab doctor` verifies the skip-worktree flag is intact and repairs it if cleared by git operations (merges, rebases).
+Git safety: pkglab injects a `pkglab check` command into the repo's pre-commit hook (Husky, raw git, or warns for Lefthook). This scans staged lockfiles for localhost registry URLs and the workspace for pkglab version strings, preventing accidental commits. The `.npmrc` changes are visible in `git status` so developers stay aware of the local override.
 
 On first `pkglab add` in a repo, pkglab prints a notice:
 
 ```
 notice: pkglab added registry entries to .npmrc
 These entries point to localhost and will break CI if committed.
-pkglab has applied --skip-worktree to prevent accidental commits.
-Run pkglab rm to restore your .npmrc.
+A pre-commit hook (pkglab check) has been injected to catch this.
+Run pkglab restore --all to restore your .npmrc.
 ```
 
 ## Scoped installs

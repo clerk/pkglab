@@ -78,7 +78,7 @@ function resolveFromDistTags(
 const NPMRC_NOTICE =
   'notice: pkglab added registry entries to .npmrc\n' +
   'These entries point to localhost and will break CI if committed.\n' +
-  'pkglab has applied --skip-worktree to prevent accidental commits.\n' +
+  'A pre-commit hook (pkglab check) has been injected to catch this.\n' +
   'Run pkglab restore --all to restore your .npmrc.';
 
 

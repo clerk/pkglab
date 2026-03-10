@@ -11,6 +11,8 @@ import { detectPackageManager } from './pm-detect';
 import { pmCommand, run } from './proc';
 import { getActiveRepos } from './repo-state';
 
+import type { PendingUpdate } from '../types';
+
 export type { LockfilePatchEntry } from './lockfile-patch';
 
 export const MARKER_START = '# pkglab-start';
@@ -750,4 +752,55 @@ export async function buildVersionEntries(
   });
   const catalogResult = entries.some(e => e.catalogName) ? await findCatalogRoot(repo.state.path) : null;
   return { entries, catalogRoot: catalogResult?.root };
+}
+
+/**
+ * Recover from a crash that left a consumer in a dirty state.
+ * If pendingUpdate exists on a repo state, the previous install was interrupted
+ * between writing version changes and completing the install. We roll back the
+ * version changes to their originals and clear the pending marker.
+ */
+export async function recoverPendingUpdate(
+  repoPath: string,
+  pending: PendingUpdate,
+): Promise<{ recovered: string[] }> {
+  const recovered: string[] = [];
+
+  // Roll back package.json version changes
+  for (const [pkgName, targets] of Object.entries(pending.packages)) {
+    for (const t of targets) {
+      const targetPath = join(repoPath, t.dir);
+      if (t.original === '') {
+        await removePackageJsonDependency(targetPath, pkgName);
+      } else {
+        await updatePackageJsonVersion(targetPath, pkgName, t.original);
+      }
+    }
+    recovered.push(pkgName);
+  }
+
+  // Roll back catalog changes
+  if (pending.catalogs) {
+    const catalogResult = await findCatalogRoot(repoPath);
+    if (catalogResult) {
+      for (const [pkgName, entry] of Object.entries(pending.catalogs)) {
+        if (entry.original === '') {
+          await removeCatalogEntry(catalogResult.root, pkgName, entry.catalogName, entry.catalogFormat);
+        } else {
+          await updateCatalogVersion(
+            catalogResult.root,
+            pkgName,
+            entry.original,
+            entry.catalogName,
+            entry.catalogFormat,
+          );
+        }
+        if (!recovered.includes(pkgName)) {
+          recovered.push(pkgName);
+        }
+      }
+    }
+  }
+
+  return { recovered };
 }

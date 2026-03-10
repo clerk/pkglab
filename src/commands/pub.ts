@@ -8,7 +8,7 @@ import { getPositionalArgs } from '../lib/args';
 import { type ChangeReason, type CascadeResult, runCascade } from '../lib/cascade';
 import { c } from '../lib/color';
 import { loadConfig } from '../lib/config';
-import { buildConsumerWorkItems, buildVersionEntries, installWithVersionUpdates } from '../lib/consumer';
+import { buildConsumerWorkItems, buildVersionEntries, installWithVersionUpdates, recoverPendingUpdate } from '../lib/consumer';
 import { fetchIntegrityHashes } from '../lib/lockfile-patch';
 import { ensureDaemonRunning } from '../lib/daemon';
 import { CommandError, pkglabError } from '../lib/errors';
@@ -348,6 +348,24 @@ async function publishPackages(
 
   // Build consumer work items before publishing so we can stream installs
   const consumerWork = await buildConsumerWorkItems(plan, tag, preloadedActiveRepos);
+
+  // Recover any consumers left in a dirty state by a previous crashed publish.
+  // pendingUpdate indicates version changes were written but install didn't complete.
+  for (const repo of consumerWork) {
+    if (repo.state.pendingUpdate) {
+      log.warn(`Recovering dirty state for ${repo.displayName} (interrupted install)`);
+      try {
+        const { recovered } = await recoverPendingUpdate(repo.state.path, repo.state.pendingUpdate);
+        if (recovered.length > 0) {
+          log.dim(`  Rolled back: ${recovered.join(', ')}`);
+        }
+      } catch {
+        log.warn(`  Recovery failed for ${repo.displayName}, proceeding anyway`);
+      }
+      delete repo.state.pendingUpdate;
+      await saveRepoByPath(repo.state.path, repo.state);
+    }
+  }
 
   // Compute the required set for each repo: which packages from the publish batch
   // must be in the registry before the repo's install can succeed.
@@ -694,8 +712,28 @@ async function runRepoInstall(
     }
   }
 
-  // Install and save state
+  // Install and save state.
+  // Save pending state before install so crash recovery can detect dirty consumers.
   try {
+    // Mark pending update before modifying consumer files.
+    // Capture current versions so crash recovery can roll back.
+    repo.state.pendingUpdate = {
+      packages: Object.fromEntries(
+        entries.map(e => {
+          const link = repo.state.packages[e.name];
+          return [
+            e.name,
+            e.targets.map(t => {
+              const existingTarget = link?.targets.find(lt => lt.dir === t.dir);
+              return { dir: t.dir, original: existingTarget?.original ?? link?.current ?? '' };
+            }),
+          ];
+        }),
+      ),
+      timestamp: Date.now(),
+    };
+    await saveRepoByPath(repo.state.path, repo.state);
+
     await installWithVersionUpdates({
       repoPath: repo.state.path,
       catalogRoot,
@@ -713,6 +751,8 @@ async function runRepoInstall(
         link.current = entry.version;
       }
     }
+    // Clear pending state on success
+    delete repo.state.pendingUpdate;
     await saveRepoByPath(repo.state.path, repo.state);
   } catch (err) {
     if (hookCtx) {
