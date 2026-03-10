@@ -1,5 +1,16 @@
 # pkglab
 
+## 0.17.0
+
+### Minor Changes
+
+- 326200a: Add pmCommand/runPm abstraction for safe subprocess spawning, fix restore subdirectory path bug, fix pkg rm fingerprint desync, make cascade consumer filter tag-aware, and correct documentation inaccuracies
+
+### Patch Changes
+
+- 38f105b: Fix fingerprint negation patterns and ignore file support, add crash recovery for interrupted consumer installs, fix catalog resolution error handling, correct docs referencing removed skip-worktree
+- 49c9381: Correct three unverifiable claims in README reasoning section (lock file entry wording, workspace protocol semver example, and overrides phrasing)
+
 ## 0.16.1
 
 ### Patch Changes
