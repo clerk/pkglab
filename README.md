@@ -177,7 +177,7 @@ A standalone registry gives you half the picture, but you still have to manage t
 
 `pkglab` runs a lightweight npm registry as a background daemon, built on `Bun.serve()` with in-memory package metadata and write-through persistence to disk. Unknown packages are proxied to the upstream npmjs.org registry, so consumer installs work transparently for both local and public packages.
 
-When you publish, packages go through a real `bun publish` to this local registry. Exports maps, bundled dependencies, the `"files"` array, all validated the same way npm would. Consumer repos install from this registry with a standard `npm install` / `pnpm add`, producing the same `node_modules` tree your users will get. One copy of React. Correct peer dependency resolution. Real lock file entries.
+When you publish, packages go through a real `bun publish` to this local registry. Exports maps, bundled dependencies, the `"files"` array, all validated through the same publish flow your users will get. Consumer repos install from this registry with a standard `npm install` / `pnpm add`, producing the same `node_modules` tree your users will get. One copy of React. Correct peer dependency resolution. Real lock file entries.
 
 On top of that, `pkglab` handles automatic consumer updates, dependency cascading, parallel publishes with rollback, `.npmrc` protection, pre-commit checks, version pruning, and multi-worktree tag isolation. See [Features](#features) for the full list.
 
@@ -324,7 +324,7 @@ Named catalogs (`catalogs.react19`, etc.) are also supported in both formats. pk
 
 When `pkglab pub` auto-updates consumer repos, catalog-linked packages are updated in the catalog (not in individual package.json files), preserving the `catalog:` references.
 
-Bun caveat: bun caches registry metadata for up to 5 minutes, so freshly published versions are invisible to a plain `bun install`. pkglab works around this by temporarily setting `disableManifest = true` in `bunfig.toml` during consumer updates, then restoring it. This will become unnecessary once bun supports catalogs in `bun add` directly, at which point pkglab can use the non-catalog install path for bun.
+Bun caveat: bun caches registry metadata internally, so freshly published versions can be invisible to a plain `bun install`. pkglab works around this by temporarily setting `disableManifest = true` in `bunfig.toml` during consumer updates, then restoring it. This will become unnecessary once bun supports catalogs in `bun add` directly, at which point pkglab can use the non-catalog install path for bun.
 
 ## How versioning works
 
@@ -340,7 +340,7 @@ When using tags, each tag gets its own version channel. Publishing with `--tag f
 
 **Why not publish the full connected component?** The obvious fix is to publish every package connected through the dependency graph. But in a monorepo where a shared utility connects everything, publishing any one package would publish the entire repo. For Clerk, that's ~15 packages when you only changed one.
 
-**Content-aware publishing.** Instead of giving every package a new version, pkglab fingerprints each package by globbing the publishable file set (the `files` field, always-included files like package.json/README/LICENSE, and entry points from main/module/types/bin/exports) and SHA-256 hashing their contents. Packages are classified in topological order: "changed" if the content hash differs from the previous publish, "propagated" if the content is the same but a dependency got a new version, or "unchanged" if nothing is different. Unchanged packages keep their existing version and are skipped entirely.
+**Content-aware publishing.** Instead of giving every package a new version, pkglab fingerprints each package by globbing the publishable file set (the `files` field, always-included files like package.json/README/LICENSE/LICENCE/CHANGELOG, and entry points from main/module/types/bin/exports) and SHA-256 hashing their contents. Packages are classified in topological order: "changed" if the content hash differs from the previous publish, "propagated" if the content is the same but a dependency got a new version, or "unchanged" if nothing is different. Unchanged packages keep their existing version and are skipped entirely.
 
 **Two-phase cascade.** The cascade doesn't compute all dependents upfront. Instead, it works in two phases: first fingerprint, then expand. This matters because expanding dependents from an unchanged package is pointless (it kept its old version, so nothing downstream needs updating). Consider this workspace:
 
