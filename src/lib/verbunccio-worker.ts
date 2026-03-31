@@ -6,8 +6,8 @@ import pino from 'pino';
 import { loadConfig, ensurepkglabDirs } from './config';
 import { paths } from './paths';
 import { setLogDestination } from './publish-queue';
-import VerbunccioStorage from './verbunccio-storage';
 import { handleRequest } from './verbunccio-routes';
+import VerbunccioStorage from './verbunccio-storage';
 
 export async function main() {
   await ensurepkglabDirs();

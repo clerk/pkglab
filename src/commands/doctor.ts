@@ -95,7 +95,6 @@ export default defineCommand({
         );
         issues++;
       }
-
     }
 
     // Dirty state: daemon not running but repos have active pkglab packages
@@ -131,7 +130,9 @@ export default defineCommand({
         }
         const sanitized = content.replace(localhostUrlRe, '""');
         await Bun.write(lockPath, sanitized);
-        log.line(`  ${c.green('✓')} ${displayName}: sanitized ${matches.length} localhost URL${matches.length !== 1 ? 's' : ''} in bun.lock`);
+        log.line(
+          `  ${c.green('✓')} ${displayName}: sanitized ${matches.length} localhost URL${matches.length !== 1 ? 's' : ''} in bun.lock`,
+        );
       }
     }
 
@@ -161,7 +162,9 @@ export default defineCommand({
         log.line(`  ${c.green('✓')} Fingerprints: ${fp.total} file${fp.total !== 1 ? 's' : ''}, all clean`);
       } else {
         if (fp.legacy > 0) {
-          log.line(`  ${c.yellow('!')} Fingerprints: ${fp.legacy} legacy file${fp.legacy !== 1 ? 's' : ''} (missing metadata)`);
+          log.line(
+            `  ${c.yellow('!')} Fingerprints: ${fp.legacy} legacy file${fp.legacy !== 1 ? 's' : ''} (missing metadata)`,
+          );
         }
         if (fp.stale > 0 && !args.prune) {
           log.line(

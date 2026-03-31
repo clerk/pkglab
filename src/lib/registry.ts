@@ -8,12 +8,18 @@ export function registryUrl(config: pkglabConfig): string {
 // HTTP index helpers
 // ---------------------------------------------------------------------------
 
-let cachedIndex: { packages: Record<string, { rev: string; 'dist-tags': Record<string, string>; versions: string[] }> } | null = null;
+let cachedIndex: {
+  packages: Record<string, { rev: string; 'dist-tags': Record<string, string>; versions: string[] }>;
+} | null = null;
 
 async function fetchIndex(config: pkglabConfig): Promise<typeof cachedIndex> {
-  if (cachedIndex) return cachedIndex;
+  if (cachedIndex) {
+    return cachedIndex;
+  }
   const resp = await fetch(`${registryUrl(config)}/-/pkglab/index`);
-  if (!resp.ok) throw new Error(`Failed to fetch index: ${resp.status}`);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch index: ${resp.status}`);
+  }
   cachedIndex = await resp.json();
   return cachedIndex;
 }
@@ -38,7 +44,9 @@ export async function listAllPackages(config: pkglabConfig): Promise<Array<{ nam
 export async function getDistTags(name: string, config: pkglabConfig): Promise<Record<string, string>> {
   const index = await fetchIndex(config);
   const pkg = index!.packages[name];
-  if (!pkg?.['dist-tags']) return {};
+  if (!pkg?.['dist-tags']) {
+    return {};
+  }
   return { ...pkg['dist-tags'] };
 }
 
@@ -121,22 +129,32 @@ export async function unpublishVersions(
     invalidateIndexCache();
     // Refetch latest doc
     const refetchResp = await fetch(pkgUrl, { headers });
-    if (!refetchResp.ok) break;
+    if (!refetchResp.ok) {
+      break;
+    }
     const freshDoc = await refetchResp.json();
     // Reapply mutations
     const freshRemoved: string[] = [];
     for (const v of versions) {
-      if (!freshDoc.versions?.[v]) continue;
+      if (!freshDoc.versions?.[v]) {
+        continue;
+      }
       delete freshDoc.versions[v];
-      if (freshDoc.time) delete freshDoc.time[v];
+      if (freshDoc.time) {
+        delete freshDoc.time[v];
+      }
       freshRemoved.push(v);
     }
     if (freshDoc['dist-tags']) {
       for (const [tag, v] of Object.entries(freshDoc['dist-tags'])) {
-        if (removeSet.has(v as string)) delete freshDoc['dist-tags'][tag];
+        if (removeSet.has(v as string)) {
+          delete freshDoc['dist-tags'][tag];
+        }
       }
     }
-    if (freshRemoved.length === 0) break;
+    if (freshRemoved.length === 0) {
+      break;
+    }
     const freshRev = freshDoc._rev || '0-0';
     putResp = await fetch(`${pkgUrl}/-rev/${freshRev}`, {
       method: 'PUT',

@@ -1,6 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { removepkglabBlock, findCatalogEntry, MARKER_START } from '../consumer';
+
 import type { CatalogData } from '../consumer';
+
+import { removepkglabBlock, findCatalogEntry, MARKER_START } from '../consumer';
 
 const MARKER_END = '# pkglab-end';
 
@@ -36,15 +38,7 @@ describe('removepkglabBlock', () => {
   });
 
   test('normalizes consecutive newlines (3+) to double newlines', () => {
-    const content = [
-      'before',
-      '',
-      MARKER_START,
-      'registry=http://127.0.0.1:4873',
-      MARKER_END,
-      '',
-      'after',
-    ].join('\n');
+    const content = ['before', '', MARKER_START, 'registry=http://127.0.0.1:4873', MARKER_END, '', 'after'].join('\n');
 
     const result = removepkglabBlock(content);
     // After removal, "before\n\n\n\nafter" would have 4+ newlines, collapsed to \n\n

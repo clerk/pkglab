@@ -48,7 +48,9 @@ export default defineCommand({
       if (ws.root !== repoPath) {
         const wsPath = await canonicalRepoPath(ws.root);
         repo = await findRepoByPath(wsPath);
-        if (repo) repoPath = wsPath;
+        if (repo) {
+          repoPath = wsPath;
+        }
       }
     }
 

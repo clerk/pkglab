@@ -16,7 +16,9 @@ const levelColors: Record<string, (s: string) => string> = {
 
 function formatLogLine(line: string): string {
   const trimmed = line.trim();
-  if (!trimmed || !trimmed.startsWith('{')) return line;
+  if (!trimmed || !trimmed.startsWith('{')) {
+    return line;
+  }
   try {
     const entry = JSON.parse(trimmed);
     const level = entry.level ?? 'info';
@@ -28,7 +30,9 @@ function formatLogLine(line: string): string {
     const skip = new Set(['level', 'time', 'msg', 'pid', 'hostname']);
     const extras: string[] = [];
     for (const [k, v] of Object.entries(entry)) {
-      if (!skip.has(k)) extras.push(`${k}=${JSON.stringify(v)}`);
+      if (!skip.has(k)) {
+        extras.push(`${k}=${JSON.stringify(v)}`);
+      }
     }
     const suffix = extras.length ? ' ' + c.dim(extras.join(' ')) : '';
     return `${time}${colorize(level)} ${msg}${suffix}`;
@@ -92,12 +96,16 @@ export default defineCommand({
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
         for (const line of lines) {
-          if (line.trim()) process.stdout.write(formatLogLine(line) + '\n');
+          if (line.trim()) {
+            process.stdout.write(formatLogLine(line) + '\n');
+          }
         }
       }
       if (buffer.trim()) {

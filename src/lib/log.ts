@@ -11,8 +11,12 @@ function isTTY(): boolean {
 
 function getFormat(): 'pretty' | 'json' {
   const env = process.env.PKGLAB_LOG_FORMAT;
-  if (env === 'json') return 'json';
-  if (env === 'pretty') return 'pretty';
+  if (env === 'json') {
+    return 'json';
+  }
+  if (env === 'pretty') {
+    return 'pretty';
+  }
   return isTTY() ? 'pretty' : 'json';
 }
 

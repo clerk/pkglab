@@ -71,14 +71,18 @@ export default defineCommand({
           while (true) {
             const a = content.indexOf('"http://127.0.0.1:', idx);
             const b = content.indexOf('"http://localhost:', idx);
-            if (a === -1 && b === -1) break;
+            if (a === -1 && b === -1) {
+              break;
+            }
             const next = a === -1 ? b : b === -1 ? a : Math.min(a, b);
             count++;
             idx = next + 1;
           }
           if (count > 0) {
             const formatted = count.toLocaleString();
-            log.line(`  ${c.red('✗')} Staged ${lockfile} contains ${formatted} localhost registry URL${count !== 1 ? 's' : ''}`);
+            log.line(
+              `  ${c.red('✗')} Staged ${lockfile} contains ${formatted} localhost registry URL${count !== 1 ? 's' : ''}`,
+            );
             log.line(`    Run: pkglab doctor --lockfile`);
             issues++;
           }
@@ -94,7 +98,9 @@ export default defineCommand({
       log.success('No pkglab artifacts found');
     } else {
       log.error(`Found ${issues} pkglab artifact${issues !== 1 ? 's' : ''} that should not be committed`);
-      throw new CommandError(`Found ${issues} pkglab artifact${issues !== 1 ? 's' : ''} that should not be committed`, { logged: true });
+      throw new CommandError(`Found ${issues} pkglab artifact${issues !== 1 ? 's' : ''} that should not be committed`, {
+        logged: true,
+      });
     }
   },
 });

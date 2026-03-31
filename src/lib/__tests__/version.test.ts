@@ -1,13 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import { pkglabError } from '../errors';
-import {
-  ispkglabVersion,
-  extractTimestamp,
-  extractTag,
-  sanitizeTag,
-  generateVersion,
-} from '../version';
+import { ispkglabVersion, extractTimestamp, extractTag, sanitizeTag, generateVersion } from '../version';
 
 describe('ispkglabVersion', () => {
   test('returns true for untagged pkglab versions', () => {

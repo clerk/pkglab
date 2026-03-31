@@ -120,11 +120,21 @@ export function enqueuePublish(req: PublishRequest): QueueResult {
   for (const name of req.targets) {
     lane.pending.add(name);
   }
-  if (req.root) lane.root = true;
-  if (req.force) lane.force = true;
-  if (req.single) lane.single = true;
-  if (req.shallow) lane.shallow = true;
-  if (req.dryRun) lane.dryRun = true;
+  if (req.root) {
+    lane.root = true;
+  }
+  if (req.force) {
+    lane.force = true;
+  }
+  if (req.single) {
+    lane.single = true;
+  }
+  if (req.shallow) {
+    lane.shallow = true;
+  }
+  if (req.dryRun) {
+    lane.dryRun = true;
+  }
 
   const jobId = `pub-${++jobCounter}`;
   const coalesced = ws.publishing;
@@ -170,7 +180,9 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
           break;
         }
       }
-      if (!activeLane) break;
+      if (!activeLane) {
+        break;
+      }
 
       // Snapshot and reset the lane
       const names = [...activeLane.pending];
@@ -200,18 +212,28 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
         cmd.push(...names);
       }
 
-      if (activeTag) cmd.push('--tag', activeTag);
-      if (useForce) cmd.push('--force');
-      if (useSingle) cmd.push('--single');
-      if (useShallow) cmd.push('--shallow');
-      if (useDryRun) cmd.push('--dry-run');
+      if (activeTag) {
+        cmd.push('--tag', activeTag);
+      }
+      if (useForce) {
+        cmd.push('--force');
+      }
+      if (useSingle) {
+        cmd.push('--single');
+      }
+      if (useShallow) {
+        cmd.push('--shallow');
+      }
+      if (useDryRun) {
+        cmd.push('--dry-run');
+      }
 
       queueLog.info(`Publishing${activeTag ? ` [${activeTag}]` : ''}...`, { runId, tag: activeTag || undefined });
       if (names.length > 0 && !useRoot) {
         queueLog.info(`  ${names.join(', ')}`, { runId });
       }
 
-      const env: Record<string, string> = { ...process.env as Record<string, string>, PKGLAB_RUN_ID: runId };
+      const env: Record<string, string> = { ...(process.env as Record<string, string>), PKGLAB_RUN_ID: runId };
 
       const proc = Bun.spawn(cmd, {
         cwd: workspaceRoot,
@@ -223,11 +245,13 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       // Pipe child stdout/stderr into the log file if available
       if (logDest && proc.stdout) {
         const reader = proc.stdout.getReader();
-        (async () => {
+        void (async () => {
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                break;
+              }
               if (value) {
                 const text = new TextDecoder().decode(value);
                 for (const line of text.split('\n').filter(Boolean)) {
@@ -240,11 +264,13 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       }
       if (logDest && proc.stderr) {
         const reader = proc.stderr.getReader();
-        (async () => {
+        void (async () => {
           try {
             while (true) {
               const { done, value } = await reader.read();
-              if (done) break;
+              if (done) {
+                break;
+              }
               if (value) {
                 const text = new TextDecoder().decode(value);
                 for (const line of text.split('\n').filter(Boolean)) {
@@ -259,7 +285,11 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       const timer = setTimeout(() => {
         queueLog.error(`Publish timed out after ${PUBLISH_TIMEOUT}ms, killing...`, { runId });
         proc.kill();
-        setTimeout(() => { try { proc.kill(9); } catch {} }, 5000);
+        setTimeout(() => {
+          try {
+            proc.kill(9);
+          } catch {}
+        }, 5000);
       }, PUBLISH_TIMEOUT);
 
       const exitCode = await proc.exited;

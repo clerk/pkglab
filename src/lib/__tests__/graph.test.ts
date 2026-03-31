@@ -2,6 +2,7 @@ import { describe, test, expect } from 'bun:test';
 import { DepGraph } from 'dependency-graph';
 
 import type { WorkspacePackage } from '../../types';
+
 import {
   buildDependencyGraph,
   closeUnderDeps,
@@ -11,7 +12,6 @@ import {
   precomputeTransitiveDependents,
   precomputeTransitiveDeps,
 } from '../graph';
-
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,10 +43,7 @@ function makePkg(
 
 // Build a graph from a simple adjacency spec: { A: ['B', 'C'] } means A depends on B and C.
 // All nodes are public by default. Pass privateNodes to mark some private.
-function graphFromSpec(
-  spec: Record<string, string[]>,
-  privateNodes: string[] = [],
-): DepGraph<WorkspacePackage> {
+function graphFromSpec(spec: Record<string, string[]>, privateNodes: string[] = []): DepGraph<WorkspacePackage> {
   const privateSet = new Set(privateNodes);
   const pkgs: WorkspacePackage[] = Object.keys(spec).map(name =>
     makePkg(name, {
@@ -100,11 +97,7 @@ describe('buildDependencyGraph', () => {
   });
 
   test('includes peerDependencies and optionalDependencies', () => {
-    const pkgs = [
-      makePkg('a', { peerDeps: { b: '*' }, optionalDeps: { c: '*' } }),
-      makePkg('b'),
-      makePkg('c'),
-    ];
+    const pkgs = [makePkg('a', { peerDeps: { b: '*' }, optionalDeps: { c: '*' } }), makePkg('b'), makePkg('c')];
     const graph = buildDependencyGraph(pkgs);
     expect(graph.directDependenciesOf('a')).toEqual(expect.arrayContaining(['b', 'c']));
   });
@@ -264,12 +257,7 @@ describe('expandDependents', () => {
     // c -> b -> a. Consumer only has 'b' installed.
     const graph = graphFromSpec({ a: [], b: ['a'], c: ['b'] });
     const consumed = new Set(['b']);
-    const { newPackages, skippedDependents } = expandDependents(
-      graph,
-      ['a'],
-      new Set(['a']),
-      consumed,
-    );
+    const { newPackages, skippedDependents } = expandDependents(graph, ['a'], new Set(['a']), consumed);
     expect(newPackages).toEqual(['b']);
     // c is skipped because it's not consumed
     expect(skippedDependents.some(s => s.name === 'c')).toBe(true);
@@ -280,12 +268,7 @@ describe('expandDependents', () => {
     const graph = graphFromSpec({ a: [], b: ['a'], c: ['b'] });
     const currentScope = new Set(['a', 'b']);
     const consumed = new Set(['c']);
-    const { newPackages, dependents } = expandDependents(
-      graph,
-      ['a'],
-      currentScope,
-      consumed,
-    );
+    const { newPackages, dependents } = expandDependents(graph, ['a'], currentScope, consumed);
     expect(newPackages).toEqual(['c']);
     // b is in dependents[a] because it passes the filter (in currentScope)
     expect(dependents.a).toEqual(expect.arrayContaining(['b', 'c']));
@@ -300,12 +283,7 @@ describe('expandDependents', () => {
   test('skippedDependents excludes private packages', () => {
     const graph = graphFromSpec({ a: [], b: ['a'], c: ['a'] }, ['c']);
     const consumed = new Set<string>();
-    const { skippedDependents } = expandDependents(
-      graph,
-      ['a'],
-      new Set(['a']),
-      consumed,
-    );
+    const { skippedDependents } = expandDependents(graph, ['a'], new Set(['a']), consumed);
     // c is private, should not appear in skippedDependents
     expect(skippedDependents.some(s => s.name === 'c')).toBe(false);
     // b is public and not consumed, should be skipped
@@ -314,11 +292,7 @@ describe('expandDependents', () => {
 
   test('empty changedPackages returns nothing', () => {
     const graph = graphFromSpec({ a: [], b: ['a'] });
-    const { newPackages, dependents, skippedDependents } = expandDependents(
-      graph,
-      [],
-      new Set(['a']),
-    );
+    const { newPackages, dependents, skippedDependents } = expandDependents(graph, [], new Set(['a']));
     expect(newPackages).toHaveLength(0);
     expect(Object.keys(dependents)).toHaveLength(0);
     expect(skippedDependents).toHaveLength(0);
@@ -334,14 +308,9 @@ describe('expandDependents', () => {
   test('skippedDependents are sorted by name', () => {
     const graph = graphFromSpec({ a: [], z: ['a'], m: ['a'], d: ['a'] });
     const consumed = new Set<string>();
-    const { skippedDependents } = expandDependents(
-      graph,
-      ['a'],
-      new Set(['a']),
-      consumed,
-    );
+    const { skippedDependents } = expandDependents(graph, ['a'], new Set(['a']), consumed);
     const names = skippedDependents.map(s => s.name);
-    expect(names).toEqual([...names].sort());
+    expect(names).toEqual([...names].toSorted());
   });
 });
 

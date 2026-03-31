@@ -34,7 +34,9 @@ export async function sendPublishRequest(port: number, message: PublishPingMessa
     let reason = `HTTP ${resp.status}`;
     try {
       const body = (await resp.json()) as Record<string, unknown>;
-      if (body.reason) reason = String(body.reason);
+      if (typeof body.reason === 'string') {
+        reason = body.reason;
+      }
     } catch {
       // ignore parse errors
     }

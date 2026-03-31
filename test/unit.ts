@@ -1,4 +1,4 @@
-export {}; // module marker for top-level await
+// module marker for top-level await
 
 let passed = 0;
 let failed = 0;
@@ -82,9 +82,8 @@ heading('fingerprintPath determinism');
 
 heading('fingerprint state round-trip');
 {
-  const { loadFingerprintState, saveFingerprintState, clearFingerprintState } = await import(
-    '../src/lib/fingerprint-state'
-  );
+  const { loadFingerprintState, saveFingerprintState, clearFingerprintState } =
+    await import('../src/lib/fingerprint-state');
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { join } = await import('node:path');
 
@@ -146,17 +145,17 @@ heading('regex /g lastIndex bug');
 
   // First call advances lastIndex
   const first = re.test(content);
-  assert(first === true, 'first .test() finds the match');
+  assert(first, 'first .test() finds the match');
   assert(re.lastIndex > 0, 'lastIndex advanced after first .test()');
 
   // Without reset, second call on the same content can return false
   const secondWithoutReset = re.test(content);
-  assert(secondWithoutReset === false, 'second .test() without reset misses the match (the bug)');
+  assert(!secondWithoutReset, 'second .test() without reset misses the match (the bug)');
 
   // With reset, it works correctly
   re.lastIndex = 0;
   const secondWithReset = re.test(content);
-  assert(secondWithReset === true, 'second .test() after lastIndex reset finds the match (the fix)');
+  assert(secondWithReset, 'second .test() after lastIndex reset finds the match (the fix)');
 }
 
 heading('removepkglabBlock multiple markers');
@@ -187,4 +186,6 @@ heading('deterministicToposort cycle detection');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+if (failed > 0) {
+  process.exit(1);
+}

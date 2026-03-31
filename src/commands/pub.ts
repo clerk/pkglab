@@ -8,21 +8,23 @@ import { getPositionalArgs } from '../lib/args';
 import { type ChangeReason, type CascadeResult, runCascade } from '../lib/cascade';
 import { c } from '../lib/color';
 import { loadConfig } from '../lib/config';
-import { buildConsumerWorkItems, buildVersionEntries, installWithVersionUpdates, recoverPendingUpdate } from '../lib/consumer';
-import { fetchIntegrityHashes } from '../lib/lockfile-patch';
+import {
+  buildConsumerWorkItems,
+  buildVersionEntries,
+  installWithVersionUpdates,
+  recoverPendingUpdate,
+} from '../lib/consumer';
 import { ensureDaemonRunning } from '../lib/daemon';
 import { CommandError, pkglabError } from '../lib/errors';
 import { type PackageFingerprint } from '../lib/fingerprint';
 import { saveFingerprintState } from '../lib/fingerprint-state';
-import {
-  buildDependencyGraph,
-  precomputeTransitiveDeps,
-} from '../lib/graph';
+import { buildDependencyGraph, precomputeTransitiveDeps } from '../lib/graph';
 import { runPreHook, runPostHook, runErrorHook } from '../lib/hooks';
-import { sendPublishRequest } from '../lib/publish-ping';
 import { acquirePublishLock } from '../lib/lock';
+import { fetchIntegrityHashes } from '../lib/lockfile-patch';
 import { log } from '../lib/log';
 import { run } from '../lib/proc';
+import { sendPublishRequest } from '../lib/publish-ping';
 import { buildPublishPlan, executePublish } from '../lib/publisher';
 import { setDistTag } from '../lib/registry';
 import { saveRepoByPath } from '../lib/repo-state';
@@ -439,43 +441,47 @@ async function publishPackages(
       let consumerStart = 0;
 
       const executeStart = performance.now();
-      await executePublish(
-        plan,
-        config,
-        {
-          verbose: true,
-          onPackagePublished(entry: PublishEntry) {
-            publishedPackages.add(entry.name);
-            successfulEntries.push(entry);
-            for (const repo of pendingRepos) {
-              const required = requiredSets.get(repo);
-              if (!required) {
-                continue;
+      await executePublish(plan, config, {
+        verbose: true,
+        onPackagePublished(entry: PublishEntry) {
+          publishedPackages.add(entry.name);
+          successfulEntries.push(entry);
+          for (const repo of pendingRepos) {
+            const required = requiredSets.get(repo);
+            if (!required) {
+              continue;
+            }
+            const allReady = [...required].every(name => publishedPackages.has(name));
+            if (allReady) {
+              pendingRepos.delete(repo);
+              if (consumerStart === 0) {
+                consumerStart = performance.now();
               }
-              const allReady = [...required].every(name => publishedPackages.has(name));
-              if (allReady) {
-                pendingRepos.delete(repo);
-                if (consumerStart === 0) {
-                  consumerStart = performance.now();
-                }
-                log.info(`Starting install for ${repo.displayName}`);
-                repoInstallPromises.push(
-                  runRepoInstall(repo, { tag, port: config.port, verbose: true }, getIntegrityMap, noPmOptimizations, n => {
+              log.info(`Starting install for ${repo.displayName}`);
+              repoInstallPromises.push(
+                runRepoInstall(
+                  repo,
+                  { tag, port: config.port, verbose: true },
+                  getIntegrityMap,
+                  noPmOptimizations,
+                  n => {
                     log.dim(`  lockfile patched (${n} entries, frozen install)`);
-                  }).then(status => {
+                  },
+                )
+                  .then(status => {
                     if (status === 'ok') {
                       log.success(`  ${repo.displayName}: updated ${repo.packages.map(e => e.name).join(', ')}`);
                     }
-                  }).catch(err => {
+                  })
+                  .catch(err => {
                     log.error(`  ${repo.displayName}: install failed`);
                     throw err;
                   }),
-                );
-              }
+              );
             }
-          },
+          }
         },
-      );
+      });
       publishMs = performance.now() - executeStart;
 
       // Mark repos that depend on failed packages
@@ -526,66 +532,69 @@ async function publishPackages(
 
       try {
         const executeStart = performance.now();
-        await executePublish(
-          plan,
-          config,
-          {
-            onPublished: i => spinner.complete(i),
-            onFailed: i => spinner.fail(i),
-            onPackagePublished(entry: PublishEntry) {
-              publishedPackages.add(entry.name);
-              successfulEntries.push(entry);
-              for (const repo of pendingRepos) {
-                const required = requiredSets.get(repo);
-                if (!required) {
-                  continue;
+        await executePublish(plan, config, {
+          onPublished: i => spinner.complete(i),
+          onFailed: i => spinner.fail(i),
+          onPackagePublished(entry: PublishEntry) {
+            publishedPackages.add(entry.name);
+            successfulEntries.push(entry);
+            for (const repo of pendingRepos) {
+              const required = requiredSets.get(repo);
+              if (!required) {
+                continue;
+              }
+              const allReady = [...required].every(name => publishedPackages.has(name));
+              if (allReady) {
+                pendingRepos.delete(repo);
+                if (consumerStart === 0) {
+                  consumerStart = performance.now();
                 }
-                const allReady = [...required].every(name => publishedPackages.has(name));
-                if (allReady) {
-                  pendingRepos.delete(repo);
-                  if (consumerStart === 0) {
-                    consumerStart = performance.now();
-                  }
-                  const indices = repoPackageIndices.get(repo)!;
-                  for (const idx of indices) {
-                    spinner.setText(idx, `installing ${repo.packages[indices.indexOf(idx)].name}`);
-                  }
-                  repoInstallPromises.push(
-                    runRepoInstall(repo, { tag, port: config.port, verbose: false }, getIntegrityMap, noPmOptimizations, n => {
+                const indices = repoPackageIndices.get(repo)!;
+                for (const idx of indices) {
+                  spinner.setText(idx, `installing ${repo.packages[indices.indexOf(idx)].name}`);
+                }
+                repoInstallPromises.push(
+                  runRepoInstall(
+                    repo,
+                    { tag, port: config.port, verbose: false },
+                    getIntegrityMap,
+                    noPmOptimizations,
+                    n => {
                       const lfIdx = repoLockfileIndex.get(repo);
                       if (lfIdx !== undefined) {
                         spinner.setText(lfIdx, `lockfile patched (${n} entries, frozen install)`);
                         spinner.complete(lfIdx);
                       }
-                    }).then(status => {
-                        const lfIdx = repoLockfileIndex.get(repo);
-                        if (lfIdx !== undefined) {
-                          spinner.complete(lfIdx);
+                    },
+                  )
+                    .then(status => {
+                      const lfIdx = repoLockfileIndex.get(repo);
+                      if (lfIdx !== undefined) {
+                        spinner.complete(lfIdx);
+                      }
+                      if (status === 'skipped') {
+                        for (let i = 0; i < repo.packages.length; i++) {
+                          spinner.setText(indices[i], `skipped ${repo.packages[i].name} (hook aborted)`);
+                          spinner.fail(indices[i]);
                         }
-                        if (status === 'skipped') {
-                          for (let i = 0; i < repo.packages.length; i++) {
-                            spinner.setText(indices[i], `skipped ${repo.packages[i].name} (hook aborted)`);
-                            spinner.fail(indices[i]);
-                          }
-                        } else {
-                          for (let i = 0; i < repo.packages.length; i++) {
-                            spinner.setText(indices[i], `updated ${repo.packages[i].name}`);
-                            spinner.complete(indices[i]);
-                          }
+                      } else {
+                        for (let i = 0; i < repo.packages.length; i++) {
+                          spinner.setText(indices[i], `updated ${repo.packages[i].name}`);
+                          spinner.complete(indices[i]);
                         }
-                      })
-                      .catch(err => {
-                        for (const idx of indices) {
-                          spinner.fail(idx);
-                        }
-                        throw err;
-                      }),
-                  );
-                }
+                      }
+                    })
+                    .catch(err => {
+                      for (const idx of indices) {
+                        spinner.fail(idx);
+                      }
+                      throw err;
+                    }),
+                );
               }
-            },
+            }
           },
-        );
+        });
         publishMs = performance.now() - executeStart;
 
         // Mark repos that depend on failed packages
