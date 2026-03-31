@@ -59,7 +59,7 @@ function computeStats(values: number[]): Stats {
   if (values.length === 0) {
     return { p50: 0, p95: 0, min: 0, max: 0, mean: 0, samples: 0 };
   }
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].toSorted((a, b) => a - b);
   const p50 = percentile(sorted, 50);
   const p95 = percentile(sorted, 95);
   const min = sorted[0];
@@ -69,18 +69,26 @@ function computeStats(values: number[]): Stats {
 }
 
 function percentile(sorted: number[], pct: number): number {
-  if (sorted.length === 1) return sorted[0];
+  if (sorted.length === 1) {
+    return sorted[0];
+  }
   const rank = (pct / 100) * (sorted.length - 1);
   const lower = Math.floor(rank);
   const upper = Math.ceil(rank);
-  if (lower === upper) return sorted[lower];
+  if (lower === upper) {
+    return sorted[lower];
+  }
   const weight = rank - lower;
   return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
 function fmtMs(ms: number): string {
-  if (ms < 1) return `${ms.toFixed(2)}ms`;
-  if (ms < 10) return `${ms.toFixed(1)}ms`;
+  if (ms < 1) {
+    return `${ms.toFixed(2)}ms`;
+  }
+  if (ms < 10) {
+    return `${ms.toFixed(1)}ms`;
+  }
   return `${Math.round(ms).toLocaleString()}ms`;
 }
 
@@ -111,7 +119,9 @@ async function runCmd(
   // Remove keys explicitly set to undefined
   if (opts.env) {
     for (const [k, v] of Object.entries(opts.env)) {
-      if (v === undefined) delete mergedEnv[k];
+      if (v === undefined) {
+        delete mergedEnv[k];
+      }
     }
   }
 
@@ -133,7 +143,9 @@ async function runCmd(
       : undefined;
 
   const exitCode = await proc.exited;
-  if (timer) clearTimeout(timer);
+  if (timer) {
+    clearTimeout(timer);
+  }
   const durationMs = performance.now() - t0;
 
   const stdout = await new Response(proc.stdout).text();
@@ -282,7 +294,9 @@ async function waitForRegistry(timeoutMs = 10_000): Promise<boolean> {
   while (Date.now() < deadline) {
     try {
       const resp = await fetch(`${REGISTRY_URL}/-/ping`, { signal: AbortSignal.timeout(1000) });
-      if (resp.ok) return true;
+      if (resp.ok) {
+        return true;
+      }
     } catch {
       // not ready yet
     }
@@ -302,7 +316,9 @@ async function readPid(): Promise<number | null> {
 
 async function readRssKb(pid: number): Promise<number> {
   const result = await runCmd(['ps', '-o', 'rss=', '-p', String(pid)]);
-  if (result.exitCode !== 0) return 0;
+  if (result.exitCode !== 0) {
+    return 0;
+  }
   return parseInt(result.stdout.trim(), 10) || 0;
 }
 
@@ -423,7 +439,7 @@ async function benchPackumentGet(backend: Backend, packages: FixturePackage[]): 
     }
     await checkResp.text();
   } catch (err) {
-    console.error(`  [${backend}] could not verify packument for ${targetPkg.name}: ${err}`);
+    console.error(`  [${backend}] could not verify packument for ${targetPkg.name}: ${String(err)}`);
     return times;
   }
 
@@ -449,7 +465,7 @@ async function benchPackumentGet(backend: Backend, packages: FixturePackage[]): 
       times.push(elapsed);
     } catch (err) {
       const elapsed = performance.now() - t0;
-      console.error(`  [${backend}] packument GET #${i + 1} error: ${err}`);
+      console.error(`  [${backend}] packument GET #${i + 1} error: ${String(err)}`);
       times.push(elapsed);
     }
   }
@@ -531,7 +547,7 @@ async function runBackend(
       packageCount: packages.length,
     };
   } catch (err) {
-    console.error(`[${backend}] Fatal error: ${err}`);
+    console.error(`[${backend}] Fatal error: ${String(err)}`);
     await pkglabDown(backend).catch(() => {});
     return null;
   }

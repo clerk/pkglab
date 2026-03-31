@@ -87,7 +87,9 @@ export async function loadFingerprintState(workspaceRoot: string, tag: string | 
   const key = tagKey(tag);
   const result: FingerprintMap = {};
   for (const [pkgName, tags] of Object.entries(data)) {
-    if (pkgName === '__meta__') continue;
+    if (pkgName === '__meta__') {
+      continue;
+    }
     const entry = (tags as Record<string, FingerprintEntry>)[key];
     if (entry) {
       result[pkgName] = entry;
@@ -171,7 +173,9 @@ export async function inspectFingerprints(opts: { prune: boolean }): Promise<Ins
   }
 
   for (const file of files) {
-    if (!file.endsWith('.json')) continue;
+    if (!file.endsWith('.json')) {
+      continue;
+    }
     result.total++;
 
     const filePath = join(paths.fingerprintsDir, file);
@@ -214,7 +218,9 @@ export async function removePackageFromFingerprints(packageName: string): Promis
   }
 
   for (const file of files) {
-    if (!file.endsWith('.json')) continue;
+    if (!file.endsWith('.json')) {
+      continue;
+    }
     const filePath = join(paths.fingerprintsDir, file);
     let data: PerWorkspaceFile;
     try {
@@ -223,7 +229,9 @@ export async function removePackageFromFingerprints(packageName: string): Promis
       continue;
     }
 
-    if (!(packageName in data)) continue;
+    if (!(packageName in data)) {
+      continue;
+    }
 
     delete data[packageName];
     await atomicWrite(filePath, JSON.stringify(data, null, 2) + '\n');

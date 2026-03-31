@@ -71,7 +71,9 @@ export default defineCommand({
           while (true) {
             const a = content.indexOf('"http://127.0.0.1:', idx);
             const b = content.indexOf('"http://localhost:', idx);
-            if (a === -1 && b === -1) break;
+            if (a === -1 && b === -1) {
+              break;
+            }
             const next = a === -1 ? b : b === -1 ? a : Math.min(a, b);
             count++;
             idx = next + 1;

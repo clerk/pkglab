@@ -63,7 +63,9 @@ export function removepkglabBlock(content: string): string {
   while (true) {
     const startIdx = result.indexOf(MARKER_START);
     const endIdx = result.indexOf(MARKER_END, startIdx + MARKER_START.length);
-    if (startIdx === -1 || endIdx === -1) break;
+    if (startIdx === -1 || endIdx === -1) {
+      break;
+    }
     const before = result.slice(0, startIdx);
     const after = result.slice(endIdx + MARKER_END.length);
     result = before + after;

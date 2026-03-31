@@ -72,7 +72,9 @@ export async function patchPnpmLockfile(lockfileDir: string, entries: LockfilePa
       break;
     }
     const parent = dirname(dir);
-    if (parent === dir) break;
+    if (parent === dir) {
+      break;
+    }
     dir = parent;
   }
 

@@ -134,7 +134,9 @@ async function executeHook(
     return { status: 'ok', exitCode: 0, durationMs };
   } finally {
     clearTimeout(timer);
-    if (killTimer) clearTimeout(killTimer);
+    if (killTimer) {
+      clearTimeout(killTimer);
+    }
   }
 }
 

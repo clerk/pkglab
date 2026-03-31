@@ -44,7 +44,9 @@ export async function run(cmd: string[], options: RunOptions = {}): Promise<RunR
     new Response(proc.stderr).text(),
   ]);
 
-  if (timer) clearTimeout(timer);
+  if (timer) {
+    clearTimeout(timer);
+  }
   if (killed) {
     throw new Error(`Command timed out after ${options.timeout}ms: ${cmd.join(' ')}`);
   }

@@ -310,7 +310,7 @@ describe('expandDependents', () => {
     const consumed = new Set<string>();
     const { skippedDependents } = expandDependents(graph, ['a'], new Set(['a']), consumed);
     const names = skippedDependents.map(s => s.name);
-    expect(names).toEqual([...names].sort());
+    expect(names).toEqual([...names].toSorted());
   });
 });
 

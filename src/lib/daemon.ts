@@ -44,7 +44,9 @@ export async function startDaemon(): Promise<DaemonInfo> {
     try {
       while (true) {
         const { done, value } = await stderrReader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
         stderrChunks.push(value);
       }
     } catch {
@@ -187,7 +189,9 @@ async function validatePid(pid: number, port: number | undefined, startedAt?: nu
   // Fast path: validate process start time via ps
   if (startedAt) {
     const valid = await validatePidStartTime(pid, startedAt);
-    if (valid) return true;
+    if (valid) {
+      return true;
+    }
   } else {
     // Legacy: check command string (pidfiles without startedAt)
     try {
@@ -197,7 +201,9 @@ async function validatePid(pid: number, port: number | undefined, startedAt?: nu
           result.stdout.includes('verbunccio-worker') ||
           result.stdout.includes('pkglab') ||
           (result.stdout.includes('bun') && result.stdout.includes('verbunccio'));
-        if (match) return true;
+        if (match) {
+          return true;
+        }
       }
     } catch {}
   }

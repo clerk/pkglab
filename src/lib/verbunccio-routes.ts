@@ -13,7 +13,9 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
 }
 
 function bumpRev(currentRev?: string): string {
-  if (!currentRev) return '1-verbunccio';
+  if (!currentRev) {
+    return '1-verbunccio';
+  }
   const n = parseInt(currentRev.split('-')[0], 10);
   return `${(isNaN(n) ? 0 : n) + 1}-verbunccio`;
 }
@@ -34,7 +36,9 @@ async function proxyToUpstream(req: Request, pathname: string, search?: string):
   try {
     const upstream = new URL('https://registry.npmjs.org');
     upstream.pathname = pathname;
-    if (search) upstream.search = search;
+    if (search) {
+      upstream.search = search;
+    }
     const headers = new Headers(req.headers);
     headers.delete('authorization');
     headers.delete('host');
@@ -142,7 +146,7 @@ async function handlePublish(
     doc['dist-tags'] = { ...doc['dist-tags'], ...incomingTags };
 
     // Add time entry
-    doc.time = { ...(doc.time ?? {}) };
+    doc.time = { ...doc.time };
     doc.time[newVersionKey] = new Date().toISOString();
 
     // Bump revision
@@ -179,7 +183,9 @@ async function fetchUpstreamPackument(pkgName: string): Promise<Record<string, a
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(UPSTREAM_MERGE_TIMEOUT),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      return null;
+    }
     return (await resp.json()) as Record<string, any>;
   } catch {
     return null;
@@ -195,7 +201,7 @@ function mergePackuments(
   const merged = { ...upstream };
 
   // Merge versions: upstream as base, local versions overlay on top
-  merged.versions = { ...(upstream.versions ?? {}) };
+  merged.versions = { ...upstream.versions };
   for (const [ver, data] of Object.entries(local.versions ?? {})) {
     merged.versions[ver] = data;
   }
@@ -216,10 +222,10 @@ function mergePackuments(
   }
 
   // Merge dist-tags: upstream as base, local tags overlay
-  merged['dist-tags'] = { ...(upstream['dist-tags'] ?? {}), ...(local['dist-tags'] ?? {}) };
+  merged['dist-tags'] = { ...upstream['dist-tags'], ...local['dist-tags'] };
 
   // Merge time entries
-  merged.time = { ...(upstream.time ?? {}), ...(local.time ?? {}) };
+  merged.time = { ...upstream.time, ...local.time };
 
   // Use local _id, _rev, name
   merged._id = local._id;
@@ -448,7 +454,7 @@ async function handlePublishQueue(req: Request): Promise<Response> {
 
   const req_: PublishRequest = {
     workspaceRoot,
-    targets: targets as string[],
+    targets: targets,
     tag: typeof body.tag === 'string' ? body.tag : undefined,
     force: body.force === true,
     shallow: body.shallow === true,
