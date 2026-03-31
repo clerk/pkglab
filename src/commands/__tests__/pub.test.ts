@@ -1,15 +1,13 @@
 import { describe, test, expect } from 'bun:test';
 import { DepGraph } from 'dependency-graph';
 
-import type { WorkspacePackage } from '../../types';
 import type { PackageFingerprint } from '../../lib/fingerprint';
+import type { WorkspacePackage } from '../../types';
+
 import { detectChanges } from '../../lib/cascade';
 
 // Helper to create a minimal WorkspacePackage
-function makePackage(
-  name: string,
-  deps: Record<string, string> = {},
-): WorkspacePackage {
+function makePackage(name: string, deps: Record<string, string> = {}): WorkspacePackage {
   return {
     name,
     dir: `/fake/${name}`,
@@ -51,9 +49,7 @@ describe('detectChanges', () => {
   test('package with no previous state is classified as changed', () => {
     const pkg = makePackage('pkg-a');
     const graph = makeGraph([pkg]);
-    const fingerprints = new Map<string, PackageFingerprint>([
-      ['pkg-a', { hash: 'abc123', fileCount: 5 }],
-    ]);
+    const fingerprints = new Map<string, PackageFingerprint>([['pkg-a', { hash: 'abc123', fileCount: 5 }]]);
     const previousState: Record<string, { hash: string; version: string }> = {};
 
     const { reason, existingVersions } = detectChanges([pkg], fingerprints, previousState, graph);
@@ -65,9 +61,7 @@ describe('detectChanges', () => {
   test('package with hash mismatch is classified as changed', () => {
     const pkg = makePackage('pkg-a');
     const graph = makeGraph([pkg]);
-    const fingerprints = new Map<string, PackageFingerprint>([
-      ['pkg-a', { hash: 'new-hash', fileCount: 5 }],
-    ]);
+    const fingerprints = new Map<string, PackageFingerprint>([['pkg-a', { hash: 'new-hash', fileCount: 5 }]]);
     const previousState = {
       'pkg-a': { hash: 'old-hash', version: '0.0.0-pkglab.12345' },
     };
@@ -94,9 +88,7 @@ describe('detectChanges', () => {
   test('package with matching hash and no changed deps is classified as unchanged', () => {
     const pkg = makePackage('pkg-a');
     const graph = makeGraph([pkg]);
-    const fingerprints = new Map<string, PackageFingerprint>([
-      ['pkg-a', { hash: 'same-hash', fileCount: 5 }],
-    ]);
+    const fingerprints = new Map<string, PackageFingerprint>([['pkg-a', { hash: 'same-hash', fileCount: 5 }]]);
     const previousState = {
       'pkg-a': { hash: 'same-hash', version: '0.0.0-pkglab.12345' },
     };
@@ -215,9 +207,7 @@ describe('detectChanges', () => {
     // But only consumer is in the cascade set
     const cascadePackages = [consumer];
 
-    const fingerprints = new Map<string, PackageFingerprint>([
-      ['consumer', { hash: 'same-hash', fileCount: 4 }],
-    ]);
+    const fingerprints = new Map<string, PackageFingerprint>([['consumer', { hash: 'same-hash', fileCount: 4 }]]);
     const previousState = {
       consumer: { hash: 'same-hash', version: '0.0.0-pkglab.99999' },
     };
@@ -258,9 +248,7 @@ describe('detectChanges', () => {
     // Empty graph, package is not added as a node
     const graph = new DepGraph<WorkspacePackage>();
 
-    const fingerprints = new Map<string, PackageFingerprint>([
-      ['orphan', { hash: 'same-hash', fileCount: 1 }],
-    ]);
+    const fingerprints = new Map<string, PackageFingerprint>([['orphan', { hash: 'same-hash', fileCount: 1 }]]);
     const previousState = {
       orphan: { hash: 'same-hash', version: '0.0.0-pkglab.55555' },
     };

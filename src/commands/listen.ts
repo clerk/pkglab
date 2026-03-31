@@ -18,9 +18,7 @@ export default defineCommand({
     },
   },
   async run() {
-    log.warn(
-      'The listen command is deprecated. Publish coalescing is now built into the registry server.',
-    );
+    log.warn('The listen command is deprecated. Publish coalescing is now built into the registry server.');
     log.info('Use ' + c.blue('pkglab pub --ping') + ' to send publish requests to the registry.');
     log.line('');
 

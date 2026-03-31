@@ -9,9 +9,9 @@
  *   bun run benchmarks/registry-benchmark.ts
  */
 
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { mkdir, rm, unlink } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -242,7 +242,9 @@ async function createFixtures(): Promise<{ wsRoot: string; packages: FixturePack
     await Bun.write(join(distDir, 'index.js'), code);
     await Bun.write(
       join(distDir, 'index.d.ts'),
-      Array.from({ length: fnCount }, (_, i) => `export declare function fn${i}(a: number, b: number): number;\n`).join(''),
+      Array.from({ length: fnCount }, (_, i) => `export declare function fn${i}(a: number, b: number): number;\n`).join(
+        '',
+      ),
     );
   }
 
@@ -414,7 +416,9 @@ async function benchPackumentGet(backend: Backend, packages: FixturePackage[]): 
     });
     if (!checkResp.ok) {
       await checkResp.text();
-      console.error(`  [${backend}] packument for ${targetPkg.name} not found (${checkResp.status}), skipping benchmark`);
+      console.error(
+        `  [${backend}] packument for ${targetPkg.name} not found (${checkResp.status}), skipping benchmark`,
+      );
       return times;
     }
     await checkResp.text();
@@ -466,7 +470,11 @@ interface BackendResults {
   packageCount: number;
 }
 
-async function runBackend(backend: Backend, wsRoot: string, packages: FixturePackage[]): Promise<BackendResults | null> {
+async function runBackend(
+  backend: Backend,
+  wsRoot: string,
+  packages: FixturePackage[],
+): Promise<BackendResults | null> {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`Backend: ${backend}`);
   console.log('='.repeat(60));
@@ -561,20 +569,29 @@ function printTable(results: Partial<Record<Backend, BackendResults | null>>): v
   ];
 
   for (const dr of detailRows) {
-    const line =
-      `| ${dr.metric.padEnd(23)} | ${dr.format(dr.stats.p50).padEnd(16)} | ${dr.format(dr.stats.p95).padEnd(16)} | ${dr.format(dr.stats.min)} / ${dr.format(dr.stats.max)} |`;
+    const line = `| ${dr.metric.padEnd(23)} | ${dr.format(dr.stats.p50).padEnd(16)} | ${dr.format(dr.stats.p95).padEnd(16)} | ${dr.format(dr.stats.min)} / ${dr.format(dr.stats.max)} |`;
     console.log(line);
   }
 
-  console.log(`| ${'Memory idle (RSS)'.padEnd(23)} | ${fmtMb(r.memoryIdleKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`);
-  console.log(`| ${'Memory after pub (RSS)'.padEnd(23)} | ${fmtMb(r.memoryAfterPublishKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`);
+  console.log(
+    `| ${'Memory idle (RSS)'.padEnd(23)} | ${fmtMb(r.memoryIdleKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`,
+  );
+  console.log(
+    `| ${'Memory after pub (RSS)'.padEnd(23)} | ${fmtMb(r.memoryAfterPublishKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`,
+  );
 
   // Print detailed stats
   console.log('');
   console.log('Detailed statistics:');
-  console.log(`    Cold start:    p50=${fmtMs(r.coldStart.p50)}, p95=${fmtMs(r.coldStart.p95)}, min=${fmtMs(r.coldStart.min)}, max=${fmtMs(r.coldStart.max)}, n=${r.coldStart.samples}`);
-  console.log(`    Publish:       p50=${fmtMs(r.publish.p50)}, p95=${fmtMs(r.publish.p95)}, min=${fmtMs(r.publish.min)}, max=${fmtMs(r.publish.max)}, n=${r.publish.samples}`);
-  console.log(`    Packument GET: p50=${fmtMs(r.packumentGet.p50)}, p95=${fmtMs(r.packumentGet.p95)}, min=${fmtMs(r.packumentGet.min)}, max=${fmtMs(r.packumentGet.max)}, n=${r.packumentGet.samples}`);
+  console.log(
+    `    Cold start:    p50=${fmtMs(r.coldStart.p50)}, p95=${fmtMs(r.coldStart.p95)}, min=${fmtMs(r.coldStart.min)}, max=${fmtMs(r.coldStart.max)}, n=${r.coldStart.samples}`,
+  );
+  console.log(
+    `    Publish:       p50=${fmtMs(r.publish.p50)}, p95=${fmtMs(r.publish.p95)}, min=${fmtMs(r.publish.min)}, max=${fmtMs(r.publish.max)}, n=${r.publish.samples}`,
+  );
+  console.log(
+    `    Packument GET: p50=${fmtMs(r.packumentGet.p50)}, p95=${fmtMs(r.packumentGet.p95)}, min=${fmtMs(r.packumentGet.min)}, max=${fmtMs(r.packumentGet.max)}, n=${r.packumentGet.samples}`,
+  );
   console.log(`    Memory idle:   ${fmtMb(r.memoryIdleKb)}`);
   console.log(`    Memory post:   ${fmtMb(r.memoryAfterPublishKb)}`);
 }
@@ -660,7 +677,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Benchmark failed:', err);
   process.exit(1);
 });

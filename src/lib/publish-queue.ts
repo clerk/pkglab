@@ -211,7 +211,7 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
         queueLog.info(`  ${names.join(', ')}`, { runId });
       }
 
-      const env: Record<string, string> = { ...process.env as Record<string, string>, PKGLAB_RUN_ID: runId };
+      const env: Record<string, string> = { ...(process.env as Record<string, string>), PKGLAB_RUN_ID: runId };
 
       const proc = Bun.spawn(cmd, {
         cwd: workspaceRoot,
@@ -259,7 +259,11 @@ async function drainLanes(ws: WorkspaceState, workspaceRoot: string): Promise<vo
       const timer = setTimeout(() => {
         queueLog.error(`Publish timed out after ${PUBLISH_TIMEOUT}ms, killing...`, { runId });
         proc.kill();
-        setTimeout(() => { try { proc.kill(9); } catch {} }, 5000);
+        setTimeout(() => {
+          try {
+            proc.kill(9);
+          } catch {}
+        }, 5000);
       }, PUBLISH_TIMEOUT);
 
       const exitCode = await proc.exited;

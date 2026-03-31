@@ -36,7 +36,10 @@ export interface PendingUpdate {
   /** Packages being updated: name -> previous version entries */
   packages: Record<string, Array<{ dir: string; original: string }>>;
   /** Catalog entries being updated: name -> previous version */
-  catalogs?: Record<string, { catalogName: string; catalogFormat?: 'package-json' | 'pnpm-workspace'; original: string }>;
+  catalogs?: Record<
+    string,
+    { catalogName: string; catalogFormat?: 'package-json' | 'pnpm-workspace'; original: string }
+  >;
   timestamp: number;
 }
 

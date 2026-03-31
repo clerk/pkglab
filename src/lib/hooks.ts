@@ -151,7 +151,11 @@ type ErrorInput = HookInput & {
   error: NonNullable<PkglabHookPayload['error']>;
 };
 
-function buildPayload(ctx: HookInput, phase: PkglabHookPayload['phase'], error?: PkglabHookPayload['error']): PkglabHookPayload {
+function buildPayload(
+  ctx: HookInput,
+  phase: PkglabHookPayload['phase'],
+  error?: PkglabHookPayload['error'],
+): PkglabHookPayload {
   return {
     schemaVersion: 1,
     event: ctx.event,

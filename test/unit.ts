@@ -82,9 +82,8 @@ heading('fingerprintPath determinism');
 
 heading('fingerprint state round-trip');
 {
-  const { loadFingerprintState, saveFingerprintState, clearFingerprintState } = await import(
-    '../src/lib/fingerprint-state'
-  );
+  const { loadFingerprintState, saveFingerprintState, clearFingerprintState } =
+    await import('../src/lib/fingerprint-state');
   const { mkdtemp, rm } = await import('node:fs/promises');
   const { join } = await import('node:path');
 

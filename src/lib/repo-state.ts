@@ -86,9 +86,7 @@ export async function findRepoByPath(repoPath: string): Promise<RepoEntry | null
  * Returns only the repos that still exist.
  */
 async function pruneStaleRepos(repos: RepoEntry[]): Promise<RepoEntry[]> {
-  const checks = await Promise.all(
-    repos.map(async repo => ({ repo, alive: await exists(repo.state.path) })),
-  );
+  const checks = await Promise.all(repos.map(async repo => ({ repo, alive: await exists(repo.state.path) })));
   const stale = checks.filter(c => !c.alive);
   for (const { repo } of stale) {
     await deleteRepoByPath(repo.state.path);
@@ -146,7 +144,7 @@ export async function loadAllRepos(): Promise<RepoEntry[]> {
 }
 
 export async function getActiveRepos(preloaded?: RepoEntry[]): Promise<RepoEntry[]> {
-  const all = preloaded ?? await loadOperationalRepos();
+  const all = preloaded ?? (await loadOperationalRepos());
   return all.filter(entry => entry.state.active);
 }
 
@@ -159,7 +157,7 @@ export async function activateRepo(state: RepoState, port: number): Promise<void
 }
 
 export async function deactivateAllRepos(preloaded?: RepoEntry[]): Promise<void> {
-  const all = preloaded ?? await loadOperationalRepos();
+  const all = preloaded ?? (await loadOperationalRepos());
   for (const { state } of all) {
     if (state.active) {
       state.active = false;

@@ -60,10 +60,7 @@ function replaceIntegrity(content: string, name: string, version: string, newInt
  * update integrity hashes, then run pnpm install --frozen-lockfile.
  * Returns true on success. On failure, restores original lockfile and returns false.
  */
-export async function patchPnpmLockfile(
-  lockfileDir: string,
-  entries: LockfilePatchEntry[],
-): Promise<boolean> {
+export async function patchPnpmLockfile(lockfileDir: string, entries: LockfilePatchEntry[]): Promise<boolean> {
   // Walk upward to find pnpm-lock.yaml (lives at the workspace root,
   // but lockfileDir may be a sub-package within the monorepo)
   let lockfilePath: string | undefined;
@@ -116,10 +113,9 @@ export async function patchPnpmLockfile(
   await atomicWrite(lockfilePath, patched);
 
   // Run pnpm install with frozen lockfile to apply without resolution
-  const result = await run(
-    ['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts', '--prefer-offline'],
-    { cwd: lockfileRoot },
-  );
+  const result = await run(['pnpm', 'install', '--frozen-lockfile', '--ignore-scripts', '--prefer-offline'], {
+    cwd: lockfileRoot,
+  });
 
   if (result.exitCode === 0) {
     return true;
@@ -145,7 +141,7 @@ export async function fetchIntegrityHashes(
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
 
-  const fetches = packages.map(async (pkg) => {
+  const fetches = packages.map(async pkg => {
     const encodedName = encodeURIComponent(pkg.name).replace('%40', '@');
     const url = `http://127.0.0.1:${port}/${encodedName}`;
 

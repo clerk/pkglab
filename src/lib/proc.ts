@@ -77,11 +77,7 @@ export function pmCommand(
 /**
  * Run a package manager command. Handles BUN_BE_BUN for compiled binary mode.
  */
-export async function runPm(
-  pm: string,
-  args: string[],
-  opts?: RunOptions,
-): Promise<RunResult> {
+export async function runPm(pm: string, args: string[], opts?: RunOptions): Promise<RunResult> {
   const { cmd, env } = pmCommand(pm, args);
   return run(cmd, { ...opts, env: { ...env, ...opts?.env } });
 }

@@ -1,7 +1,8 @@
-import { join } from 'node:path';
 import { mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import type { FileStat, PackageFingerprint } from './fingerprint';
+
 import { atomicWrite } from './fs';
 import { paths } from './paths';
 

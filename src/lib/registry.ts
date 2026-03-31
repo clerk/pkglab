@@ -8,7 +8,9 @@ export function registryUrl(config: pkglabConfig): string {
 // HTTP index helpers
 // ---------------------------------------------------------------------------
 
-let cachedIndex: { packages: Record<string, { rev: string; 'dist-tags': Record<string, string>; versions: string[] }> } | null = null;
+let cachedIndex: {
+  packages: Record<string, { rev: string; 'dist-tags': Record<string, string>; versions: string[] }>;
+} | null = null;
 
 async function fetchIndex(config: pkglabConfig): Promise<typeof cachedIndex> {
   if (cachedIndex) return cachedIndex;
