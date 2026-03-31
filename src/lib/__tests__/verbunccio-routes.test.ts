@@ -89,9 +89,7 @@ describe('proxyToUpstream', () => {
     test('retries on network error and succeeds on second attempt', async () => {
       const packument = { name: 'react', versions: { '18.0.0': {} } };
 
-      fetchSpy
-        .mockRejectedValueOnce(new TypeError('fetch failed'))
-        .mockResolvedValueOnce(okJson(packument));
+      fetchSpy.mockRejectedValueOnce(new TypeError('fetch failed')).mockResolvedValueOnce(okJson(packument));
 
       const storage = createMockStorage();
       const resp = await handleRequest(createRequest('/react'), storage, PORT);
