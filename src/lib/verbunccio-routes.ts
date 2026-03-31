@@ -52,7 +52,7 @@ async function proxyToUpstream(req: Request, pathname: string, search?: string):
       const resp = await fetch(url, {
         method: req.method,
         headers,
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(15_000),
       });
       // Bun's fetch auto-decompresses the body, so we must strip
       // Content-Encoding and Content-Length to avoid the client trying
