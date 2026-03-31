@@ -32,34 +32,56 @@ function safeDecode(raw: string): { ok: true; value: string } | { ok: false } {
   }
 }
 
+const PROXY_MAX_RETRIES = 2;
+const PROXY_RETRY_DELAY_MS = 500;
+
 async function proxyToUpstream(req: Request, pathname: string, search?: string): Promise<Response> {
-  try {
-    const upstream = new URL('https://registry.npmjs.org');
-    upstream.pathname = pathname;
-    if (search) {
-      upstream.search = search;
-    }
-    const headers = new Headers(req.headers);
-    headers.delete('authorization');
-    headers.delete('host');
-    const resp = await fetch(upstream.toString(), {
-      method: req.method,
-      headers,
-      signal: AbortSignal.timeout(30_000),
-    });
-    // Bun's fetch auto-decompresses the body, so we must strip
-    // Content-Encoding and Content-Length to avoid the client trying
-    // to decompress an already-decompressed stream.
-    const proxyHeaders = new Headers(resp.headers);
-    proxyHeaders.delete('content-encoding');
-    proxyHeaders.delete('content-length');
-    return new Response(resp.body, {
-      status: resp.status,
-      headers: proxyHeaders,
-    });
-  } catch {
-    return jsonResponse(502, { error: 'bad_gateway', reason: 'upstream registry unavailable' });
+  const upstream = new URL('https://registry.npmjs.org');
+  upstream.pathname = pathname;
+  if (search) {
+    upstream.search = search;
   }
+  const headers = new Headers(req.headers);
+  headers.delete('authorization');
+  headers.delete('host');
+  const url = upstream.toString();
+  const isJson = !pathname.includes('/-/');
+
+  for (let attempt = 0; attempt <= PROXY_MAX_RETRIES; attempt++) {
+    try {
+      const resp = await fetch(url, {
+        method: req.method,
+        headers,
+        signal: AbortSignal.timeout(15_000),
+      });
+      // Bun's fetch auto-decompresses the body, so we must strip
+      // Content-Encoding and Content-Length to avoid the client trying
+      // to decompress an already-decompressed stream.
+      const proxyHeaders = new Headers(resp.headers);
+      proxyHeaders.delete('content-encoding');
+      proxyHeaders.delete('content-length');
+
+      if (!isJson) {
+        // Tarballs: stream directly (integrity verified by npm via shasum)
+        return new Response(resp.body, { status: resp.status, headers: proxyHeaders });
+      }
+
+      // JSON packuments: buffer and validate to catch truncated responses
+      const body = await resp.text();
+      if (resp.ok && body.length > 0) {
+        JSON.parse(body); // validate — throws on corrupted/truncated JSON
+      }
+      return new Response(body, { status: resp.status, headers: proxyHeaders });
+    } catch {
+      if (attempt < PROXY_MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, PROXY_RETRY_DELAY_MS * (attempt + 1)));
+        continue;
+      }
+      return jsonResponse(502, { error: 'bad_gateway', reason: 'upstream registry unavailable' });
+    }
+  }
+  // unreachable, but satisfies TypeScript
+  return jsonResponse(502, { error: 'bad_gateway', reason: 'upstream registry unavailable' });
 }
 
 // Publish a new package version
