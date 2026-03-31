@@ -76,7 +76,9 @@ export async function startListenerDaemon(workspaceRoot: string): Promise<Listen
     try {
       while (true) {
         const { done, value } = await stderrReader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
         stderrChunks.push(value);
       }
     } catch {}
@@ -137,7 +139,9 @@ export async function ensureListenerRunning(workspaceRoot: string): Promise<void
     let delay = 100;
     while (Date.now() - start < maxWait) {
       await Bun.sleep(delay);
-      if (await isListenerRunning(socketPath)) return;
+      if (await isListenerRunning(socketPath)) {
+        return;
+      }
       if (await isLockStale(lockPath)) {
         await unlink(lockPath).catch(() => {});
         return ensureListenerRunning(workspaceRoot);

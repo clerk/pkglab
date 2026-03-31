@@ -427,8 +427,11 @@ import type { PkglabHookPayload } from './payload';
 const payload: PkglabHookPayload = JSON.parse(process.argv[2]);
 
 const envFile = Bun.file('.env.local');
-const existing = await envFile.exists() ? await envFile.text() : '';
-const cleaned = existing.split('\n').filter(l => !l.startsWith('CLERK_API_URL=')).join('\n');
+const existing = (await envFile.exists()) ? await envFile.text() : '';
+const cleaned = existing
+  .split('\n')
+  .filter(l => !l.startsWith('CLERK_API_URL='))
+  .join('\n');
 await Bun.write(envFile, cleaned.trimEnd() + '\nCLERK_API_URL=http://localhost:3100\n');
 ```
 

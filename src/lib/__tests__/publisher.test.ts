@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'bun:test';
 
 import type { WorkspacePackage } from '../../types';
+
 import { buildPublishPlan } from '../publisher';
 
 function makePackage(
@@ -97,10 +98,7 @@ describe('buildPublishPlan', () => {
 
   describe('dep rewriting for in-scope workspace deps', () => {
     test('rewrites workspace deps that are in the publish set', () => {
-      const packages = [
-        makePackage('@clerk/types'),
-        makePackage('@clerk/shared', { '@clerk/types': 'workspace:^' }),
-      ];
+      const packages = [makePackage('@clerk/types'), makePackage('@clerk/shared', { '@clerk/types': 'workspace:^' })];
       const plan = buildPublishPlan(packages, VERSION);
 
       expect(plan.packages[1].rewrittenDeps).toEqual({
@@ -150,10 +148,7 @@ describe('buildPublishPlan', () => {
     test('in-scope packages take priority over existingVersions', () => {
       const existingVersions = new Map([['@clerk/types', '0.0.0-pkglab.1709654000000']]);
       // @clerk/types IS in the packages list AND has an existing version
-      const packages = [
-        makePackage('@clerk/types'),
-        makePackage('@clerk/shared', { '@clerk/types': 'workspace:^' }),
-      ];
+      const packages = [makePackage('@clerk/types'), makePackage('@clerk/shared', { '@clerk/types': 'workspace:^' })];
       const plan = buildPublishPlan(packages, VERSION, {}, existingVersions);
 
       // In-scope version wins over existingVersions
@@ -173,10 +168,7 @@ describe('buildPublishPlan', () => {
 
   describe('all dep field types', () => {
     test('rewrites dependencies', () => {
-      const packages = [
-        makePackage('@clerk/types'),
-        makePackage('@clerk/shared', { '@clerk/types': 'workspace:^' }),
-      ];
+      const packages = [makePackage('@clerk/types'), makePackage('@clerk/shared', { '@clerk/types': 'workspace:^' })];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[1].rewrittenDeps['@clerk/types']).toBe(VERSION);
     });
@@ -213,9 +205,13 @@ describe('buildPublishPlan', () => {
       const packages = [
         makePackage('@clerk/types'),
         makePackage('@clerk/shared'),
-        makePackage('@clerk/backend', { '@clerk/shared': 'workspace:^' }, {
-          peerDependencies: { '@clerk/types': 'workspace:*' },
-        }),
+        makePackage(
+          '@clerk/backend',
+          { '@clerk/shared': 'workspace:^' },
+          {
+            peerDependencies: { '@clerk/types': 'workspace:*' },
+          },
+        ),
       ];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[2].rewrittenDeps).toEqual({
@@ -231,46 +227,31 @@ describe('buildPublishPlan', () => {
     // Here we verify that the dep value doesn't matter, only whether the name is in scope.
 
     test('rewrites workspace:^ deps in scope', () => {
-      const packages = [
-        makePackage('pkg-a'),
-        makePackage('pkg-b', { 'pkg-a': 'workspace:^' }),
-      ];
+      const packages = [makePackage('pkg-a'), makePackage('pkg-b', { 'pkg-a': 'workspace:^' })];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[1].rewrittenDeps['pkg-a']).toBe(VERSION);
     });
 
     test('rewrites workspace:~ deps in scope', () => {
-      const packages = [
-        makePackage('pkg-a'),
-        makePackage('pkg-b', { 'pkg-a': 'workspace:~' }),
-      ];
+      const packages = [makePackage('pkg-a'), makePackage('pkg-b', { 'pkg-a': 'workspace:~' })];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[1].rewrittenDeps['pkg-a']).toBe(VERSION);
     });
 
     test('rewrites workspace:* deps in scope', () => {
-      const packages = [
-        makePackage('pkg-a'),
-        makePackage('pkg-b', { 'pkg-a': 'workspace:*' }),
-      ];
+      const packages = [makePackage('pkg-a'), makePackage('pkg-b', { 'pkg-a': 'workspace:*' })];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[1].rewrittenDeps['pkg-a']).toBe(VERSION);
     });
 
     test('rewrites workspace:^1.0.0 style deps in scope', () => {
-      const packages = [
-        makePackage('pkg-a'),
-        makePackage('pkg-b', { 'pkg-a': 'workspace:^1.0.0' }),
-      ];
+      const packages = [makePackage('pkg-a'), makePackage('pkg-b', { 'pkg-a': 'workspace:^1.0.0' })];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[1].rewrittenDeps['pkg-a']).toBe(VERSION);
     });
 
     test('rewrites plain version deps in scope', () => {
-      const packages = [
-        makePackage('pkg-a'),
-        makePackage('pkg-b', { 'pkg-a': '^1.0.0' }),
-      ];
+      const packages = [makePackage('pkg-a'), makePackage('pkg-b', { 'pkg-a': '^1.0.0' })];
       const plan = buildPublishPlan(packages, VERSION);
       expect(plan.packages[1].rewrittenDeps['pkg-a']).toBe(VERSION);
     });

@@ -43,9 +43,7 @@ export default defineCommand({
 
     // Restore all consumer repos before stopping
     const allRepos = await loadOperationalRepos();
-    const reposWithPackages = allRepos.filter(
-      r => Object.keys(r.state.packages).length > 0,
-    );
+    const reposWithPackages = allRepos.filter(r => Object.keys(r.state.packages).length > 0);
 
     if (reposWithPackages.length === 0) {
       await stopDaemon();
@@ -87,7 +85,9 @@ export default defineCommand({
           // Run pm install to sync node_modules
           await runInstall(repoPath);
 
-          log.success(`Restored ${repo.displayName} ${c.dim(`(${pkgNames.length} package${pkgNames.length > 1 ? 's' : ''})`)}`);
+          log.success(
+            `Restored ${repo.displayName} ${c.dim(`(${pkgNames.length} package${pkgNames.length > 1 ? 's' : ''})`)}`,
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           failedRepos.push({ name: repo.displayName, error: message });
@@ -99,12 +99,11 @@ export default defineCommand({
         log.line('');
         log.error(
           `${failedRepos.length} repo${failedRepos.length > 1 ? 's' : ''} failed to restore. ` +
-          'Fix the issues and retry, or run `pkglab down --force` to stop without restoring.',
+            'Fix the issues and retry, or run `pkglab down --force` to stop without restoring.',
         );
-        throw new CommandError(
-          `${failedRepos.length} repo${failedRepos.length > 1 ? 's' : ''} failed to restore.`,
-          { logged: true },
-        );
+        throw new CommandError(`${failedRepos.length} repo${failedRepos.length > 1 ? 's' : ''} failed to restore.`, {
+          logged: true,
+        });
       }
     } finally {
       await releaseLock?.();

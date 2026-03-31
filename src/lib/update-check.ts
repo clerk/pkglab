@@ -45,10 +45,13 @@ async function fetchLatestVersion(): Promise<string | null> {
   }
 }
 
+function parseVersion(v: string) {
+  return v.replace(/^v/, '').split('.').map(Number);
+}
+
 function isNewer(latest: string, current: string): boolean {
-  const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
-  const [lMaj, lMin, lPat] = parse(latest);
-  const [cMaj, cMin, cPat] = parse(current);
+  const [lMaj, lMin, lPat] = parseVersion(latest);
+  const [cMaj, cMin, cPat] = parseVersion(current);
   if (lMaj !== cMaj) {
     return lMaj > cMaj;
   }

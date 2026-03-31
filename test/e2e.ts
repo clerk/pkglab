@@ -297,16 +297,8 @@ try {
     // check should detect the localhost URLs
     const r = await pkglab(['check'], { cwd: lockfileTestDir });
     assert(r.code !== 0, 'pkglab check exits non-zero for localhost lockfile URLs');
-    assert(
-      r.stdout.includes('localhost registry URL'),
-      'output mentions localhost registry URLs',
-      r,
-    );
-    assert(
-      r.stdout.includes('pkglab doctor --lockfile'),
-      'output suggests pkglab doctor --lockfile',
-      r,
-    );
+    assert(r.stdout.includes('localhost registry URL'), 'output mentions localhost registry URLs', r);
+    assert(r.stdout.includes('pkglab doctor --lockfile'), 'output suggests pkglab doctor --lockfile', r);
   }
 
   // 10b. pkglab check passes on clean staged lockfile
@@ -319,8 +311,7 @@ try {
       version: '1.0.0',
     });
 
-    const git = (args: string[]) =>
-      Bun.spawn(['git', ...args], { cwd: cleanLockDir, stdout: 'pipe', stderr: 'pipe' });
+    const git = (args: string[]) => Bun.spawn(['git', ...args], { cwd: cleanLockDir, stdout: 'pipe', stderr: 'pipe' });
     await git(['init']).exited;
     await git(['config', 'user.email', 'test@test.com']).exited;
     await git(['config', 'user.name', 'Test']).exited;
@@ -1333,11 +1324,7 @@ try {
     const r = await pkglab(['pub', '--single', '@test/cat-pkg'], { cwd: catDir });
     assert(r.code !== 0, 'pub fails when catalog entry cannot be resolved');
     const output = r.stdout + r.stderr;
-    assert(
-      output.includes('Could not resolve catalog:nonexistent'),
-      'error message mentions unresolvable catalog',
-      r,
-    );
+    assert(output.includes('Could not resolve catalog:nonexistent'), 'error message mentions unresolvable catalog', r);
 
     await pkglab(['pkg', 'rm', '@test/cat-pkg']).catch(() => {});
   }
@@ -1423,10 +1410,7 @@ try {
     const { readFileSync } = await import('node:fs');
     const readmePath = resolve(import.meta.dir, '..', 'README.md');
     const readmeContent = readFileSync(readmePath, 'utf-8');
-    assert(
-      readmeContent.includes('parallel publishes with retry'),
-      'README says "parallel publishes with retry"',
-    );
+    assert(readmeContent.includes('parallel publishes with retry'), 'README says "parallel publishes with retry"');
     assert(
       !readmeContent.includes('parallel publishes with rollback'),
       'README does NOT say "parallel publishes with rollback"',

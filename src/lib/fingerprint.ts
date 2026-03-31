@@ -31,7 +31,9 @@ async function collectPublishFiles(packageDir: string, pkgJson: Record<string, a
 
   if (pkgJson.files && Array.isArray(pkgJson.files)) {
     const positivePatterns = (pkgJson.files as string[]).filter((p: string) => !p.startsWith('!'));
-    const negationPatterns = (pkgJson.files as string[]).filter((p: string) => p.startsWith('!')).map((p: string) => p.slice(1));
+    const negationPatterns = (pkgJson.files as string[])
+      .filter((p: string) => p.startsWith('!'))
+      .map((p: string) => p.slice(1));
 
     // Collect files matching positive patterns
     for (const pattern of positivePatterns) {
@@ -196,7 +198,11 @@ function fileStatsMatch(cached: FileStat[], current: FileStat[]): boolean {
     return false;
   }
   for (let i = 0; i < cached.length; i++) {
-    if (cached[i].path !== current[i].path || cached[i].mtimeMs !== current[i].mtimeMs || cached[i].size !== current[i].size) {
+    if (
+      cached[i].path !== current[i].path ||
+      cached[i].mtimeMs !== current[i].mtimeMs ||
+      cached[i].size !== current[i].size
+    ) {
       return false;
     }
   }
@@ -348,9 +354,7 @@ export async function fingerprintPackages(
   previousFingerprints?: Map<string, PackageFingerprint>,
 ): Promise<Map<string, PackageFingerprint>> {
   const results = new Map<string, PackageFingerprint>();
-  const fps = await Promise.all(
-    packages.map(p => fingerprintPackage(p.dir, previousFingerprints?.get(p.name))),
-  );
+  const fps = await Promise.all(packages.map(p => fingerprintPackage(p.dir, previousFingerprints?.get(p.name))));
   for (let i = 0; i < packages.length; i++) {
     results.set(packages[i].name, fps[i]);
   }

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import type { PublishPlan, PublishEntry, RepoEntry, RepoState } from '../types';
+import type { PendingUpdate } from '../types';
 import type { PackageManager } from './pm-detect';
 
 import { NpmrcConflictError } from './errors';
@@ -10,8 +11,6 @@ import { log } from './log';
 import { detectPackageManager } from './pm-detect';
 import { pmCommand, run } from './proc';
 import { getActiveRepos } from './repo-state';
-
-import type { PendingUpdate } from '../types';
 
 export type { LockfilePatchEntry } from './lockfile-patch';
 
@@ -64,7 +63,9 @@ export function removepkglabBlock(content: string): string {
   while (true) {
     const startIdx = result.indexOf(MARKER_START);
     const endIdx = result.indexOf(MARKER_END, startIdx + MARKER_START.length);
-    if (startIdx === -1 || endIdx === -1) break;
+    if (startIdx === -1 || endIdx === -1) {
+      break;
+    }
     const before = result.slice(0, startIdx);
     const after = result.slice(endIdx + MARKER_END.length);
     result = before + after;
@@ -94,10 +95,7 @@ async function isTrackedByGit(repoPath: string, file: string): Promise<boolean> 
 
 const HOOK_BLOCK = `${MARKER_START}\nnpx pkglab check\n${MARKER_END}\n`;
 
-type HookTarget =
-  | { type: 'husky'; path: string }
-  | { type: 'lefthook' }
-  | { type: 'git'; path: string };
+type HookTarget = { type: 'husky'; path: string } | { type: 'lefthook' } | { type: 'git'; path: string };
 
 async function detectHookTarget(repoPath: string): Promise<HookTarget> {
   const { stat } = await import('node:fs/promises');
@@ -268,12 +266,7 @@ export async function restorePackage(
       );
       log.info(`Restored ${pkgName} to ${original} (catalog)`);
     } else if (catalogResult && !original) {
-      await removeCatalogEntry(
-        catalogResult.root,
-        pkgName,
-        catalogName,
-        catalogFormat ?? catalogResult.format,
-      );
+      await removeCatalogEntry(catalogResult.root, pkgName, catalogName, catalogFormat ?? catalogResult.format);
       log.info(`Removed ${pkgName} from catalog (was added by pkglab, no original version)`);
     } else if (!catalogResult) {
       log.warn(`Could not find catalog root for ${pkgName}, restoring in package.json`);
@@ -713,7 +706,11 @@ export interface RepoWorkItem {
  * Build per-repo work items: which packages to update and the package manager to use.
  * Filters to repos that have at least one package from the plan matching by tag.
  */
-export async function buildConsumerWorkItems(plan: PublishPlan, tag?: string, preloadedRepos?: RepoEntry[]): Promise<RepoWorkItem[]> {
+export async function buildConsumerWorkItems(
+  plan: PublishPlan,
+  tag?: string,
+  preloadedRepos?: RepoEntry[],
+): Promise<RepoWorkItem[]> {
   const activeRepos = await getActiveRepos(preloadedRepos);
   if (activeRepos.length === 0) {
     return [];
@@ -760,10 +757,7 @@ export async function buildVersionEntries(
  * between writing version changes and completing the install. We roll back the
  * version changes to their originals and clear the pending marker.
  */
-export async function recoverPendingUpdate(
-  repoPath: string,
-  pending: PendingUpdate,
-): Promise<{ recovered: string[] }> {
+export async function recoverPendingUpdate(repoPath: string, pending: PendingUpdate): Promise<{ recovered: string[] }> {
   const recovered: string[] = [];
 
   // Roll back package.json version changes

@@ -81,7 +81,6 @@ const NPMRC_NOTICE =
   'A pre-commit hook (pkglab check) has been injected to catch this.\n' +
   'Run pkglab restore --all to restore your .npmrc.';
 
-
 async function batchInstallPackages(
   config: pkglabConfig,
   repoPath: string,
@@ -587,7 +586,9 @@ export default defineCommand({
     }
 
     if (dryRun && names.length === 0 && !scope) {
-      throw new CommandError('--dry-run requires package names or --scope. Interactive mode is not supported with --dry-run.');
+      throw new CommandError(
+        '--dry-run requires package names or --scope. Interactive mode is not supported with --dry-run.',
+      );
     }
 
     const [, repoPath] = await Promise.all([ensureDaemonRunning(), canonicalRepoPath(process.cwd())]);
@@ -623,7 +624,11 @@ export default defineCommand({
         const preResult = await runPreHook(hookCtx);
         if (preResult.status === 'ok') {
           log.success(`pre-add hook (${(preResult.durationMs / 1000).toFixed(1)}s)`);
-        } else if (preResult.status === 'aborted' || preResult.status === 'failed' || preResult.status === 'timed_out') {
+        } else if (
+          preResult.status === 'aborted' ||
+          preResult.status === 'failed' ||
+          preResult.status === 'timed_out'
+        ) {
           const label = preResult.status === 'timed_out' ? 'timed out' : `failed (exit ${preResult.exitCode ?? 1})`;
           log.error(`pre-add hook ${label}`);
           await runErrorHook({
@@ -634,7 +639,16 @@ export default defineCommand({
         }
 
         try {
-          await batchInstallPackages(config, repoPath, resolved, catalog, packagejson, dryRun, verbose, cachedWorkspace);
+          await batchInstallPackages(
+            config,
+            repoPath,
+            resolved,
+            catalog,
+            packagejson,
+            dryRun,
+            verbose,
+            cachedWorkspace,
+          );
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           await runErrorHook({

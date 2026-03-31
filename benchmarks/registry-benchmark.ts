@@ -9,9 +9,9 @@
  *   bun run benchmarks/registry-benchmark.ts
  */
 
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { mkdir, rm, unlink } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -59,7 +59,7 @@ function computeStats(values: number[]): Stats {
   if (values.length === 0) {
     return { p50: 0, p95: 0, min: 0, max: 0, mean: 0, samples: 0 };
   }
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].toSorted((a, b) => a - b);
   const p50 = percentile(sorted, 50);
   const p95 = percentile(sorted, 95);
   const min = sorted[0];
@@ -69,18 +69,26 @@ function computeStats(values: number[]): Stats {
 }
 
 function percentile(sorted: number[], pct: number): number {
-  if (sorted.length === 1) return sorted[0];
+  if (sorted.length === 1) {
+    return sorted[0];
+  }
   const rank = (pct / 100) * (sorted.length - 1);
   const lower = Math.floor(rank);
   const upper = Math.ceil(rank);
-  if (lower === upper) return sorted[lower];
+  if (lower === upper) {
+    return sorted[lower];
+  }
   const weight = rank - lower;
   return sorted[lower] * (1 - weight) + sorted[upper] * weight;
 }
 
 function fmtMs(ms: number): string {
-  if (ms < 1) return `${ms.toFixed(2)}ms`;
-  if (ms < 10) return `${ms.toFixed(1)}ms`;
+  if (ms < 1) {
+    return `${ms.toFixed(2)}ms`;
+  }
+  if (ms < 10) {
+    return `${ms.toFixed(1)}ms`;
+  }
   return `${Math.round(ms).toLocaleString()}ms`;
 }
 
@@ -111,7 +119,9 @@ async function runCmd(
   // Remove keys explicitly set to undefined
   if (opts.env) {
     for (const [k, v] of Object.entries(opts.env)) {
-      if (v === undefined) delete mergedEnv[k];
+      if (v === undefined) {
+        delete mergedEnv[k];
+      }
     }
   }
 
@@ -133,7 +143,9 @@ async function runCmd(
       : undefined;
 
   const exitCode = await proc.exited;
-  if (timer) clearTimeout(timer);
+  if (timer) {
+    clearTimeout(timer);
+  }
   const durationMs = performance.now() - t0;
 
   const stdout = await new Response(proc.stdout).text();
@@ -242,7 +254,9 @@ async function createFixtures(): Promise<{ wsRoot: string; packages: FixturePack
     await Bun.write(join(distDir, 'index.js'), code);
     await Bun.write(
       join(distDir, 'index.d.ts'),
-      Array.from({ length: fnCount }, (_, i) => `export declare function fn${i}(a: number, b: number): number;\n`).join(''),
+      Array.from({ length: fnCount }, (_, i) => `export declare function fn${i}(a: number, b: number): number;\n`).join(
+        '',
+      ),
     );
   }
 
@@ -280,7 +294,9 @@ async function waitForRegistry(timeoutMs = 10_000): Promise<boolean> {
   while (Date.now() < deadline) {
     try {
       const resp = await fetch(`${REGISTRY_URL}/-/ping`, { signal: AbortSignal.timeout(1000) });
-      if (resp.ok) return true;
+      if (resp.ok) {
+        return true;
+      }
     } catch {
       // not ready yet
     }
@@ -300,7 +316,9 @@ async function readPid(): Promise<number | null> {
 
 async function readRssKb(pid: number): Promise<number> {
   const result = await runCmd(['ps', '-o', 'rss=', '-p', String(pid)]);
-  if (result.exitCode !== 0) return 0;
+  if (result.exitCode !== 0) {
+    return 0;
+  }
   return parseInt(result.stdout.trim(), 10) || 0;
 }
 
@@ -414,12 +432,14 @@ async function benchPackumentGet(backend: Backend, packages: FixturePackage[]): 
     });
     if (!checkResp.ok) {
       await checkResp.text();
-      console.error(`  [${backend}] packument for ${targetPkg.name} not found (${checkResp.status}), skipping benchmark`);
+      console.error(
+        `  [${backend}] packument for ${targetPkg.name} not found (${checkResp.status}), skipping benchmark`,
+      );
       return times;
     }
     await checkResp.text();
   } catch (err) {
-    console.error(`  [${backend}] could not verify packument for ${targetPkg.name}: ${err}`);
+    console.error(`  [${backend}] could not verify packument for ${targetPkg.name}: ${String(err)}`);
     return times;
   }
 
@@ -445,7 +465,7 @@ async function benchPackumentGet(backend: Backend, packages: FixturePackage[]): 
       times.push(elapsed);
     } catch (err) {
       const elapsed = performance.now() - t0;
-      console.error(`  [${backend}] packument GET #${i + 1} error: ${err}`);
+      console.error(`  [${backend}] packument GET #${i + 1} error: ${String(err)}`);
       times.push(elapsed);
     }
   }
@@ -466,7 +486,11 @@ interface BackendResults {
   packageCount: number;
 }
 
-async function runBackend(backend: Backend, wsRoot: string, packages: FixturePackage[]): Promise<BackendResults | null> {
+async function runBackend(
+  backend: Backend,
+  wsRoot: string,
+  packages: FixturePackage[],
+): Promise<BackendResults | null> {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`Backend: ${backend}`);
   console.log('='.repeat(60));
@@ -523,7 +547,7 @@ async function runBackend(backend: Backend, wsRoot: string, packages: FixturePac
       packageCount: packages.length,
     };
   } catch (err) {
-    console.error(`[${backend}] Fatal error: ${err}`);
+    console.error(`[${backend}] Fatal error: ${String(err)}`);
     await pkglabDown(backend).catch(() => {});
     return null;
   }
@@ -561,20 +585,29 @@ function printTable(results: Partial<Record<Backend, BackendResults | null>>): v
   ];
 
   for (const dr of detailRows) {
-    const line =
-      `| ${dr.metric.padEnd(23)} | ${dr.format(dr.stats.p50).padEnd(16)} | ${dr.format(dr.stats.p95).padEnd(16)} | ${dr.format(dr.stats.min)} / ${dr.format(dr.stats.max)} |`;
+    const line = `| ${dr.metric.padEnd(23)} | ${dr.format(dr.stats.p50).padEnd(16)} | ${dr.format(dr.stats.p95).padEnd(16)} | ${dr.format(dr.stats.min)} / ${dr.format(dr.stats.max)} |`;
     console.log(line);
   }
 
-  console.log(`| ${'Memory idle (RSS)'.padEnd(23)} | ${fmtMb(r.memoryIdleKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`);
-  console.log(`| ${'Memory after pub (RSS)'.padEnd(23)} | ${fmtMb(r.memoryAfterPublishKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`);
+  console.log(
+    `| ${'Memory idle (RSS)'.padEnd(23)} | ${fmtMb(r.memoryIdleKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`,
+  );
+  console.log(
+    `| ${'Memory after pub (RSS)'.padEnd(23)} | ${fmtMb(r.memoryAfterPublishKb).padEnd(16)} | ${''.padEnd(16)} | ${''.padEnd(22)} |`,
+  );
 
   // Print detailed stats
   console.log('');
   console.log('Detailed statistics:');
-  console.log(`    Cold start:    p50=${fmtMs(r.coldStart.p50)}, p95=${fmtMs(r.coldStart.p95)}, min=${fmtMs(r.coldStart.min)}, max=${fmtMs(r.coldStart.max)}, n=${r.coldStart.samples}`);
-  console.log(`    Publish:       p50=${fmtMs(r.publish.p50)}, p95=${fmtMs(r.publish.p95)}, min=${fmtMs(r.publish.min)}, max=${fmtMs(r.publish.max)}, n=${r.publish.samples}`);
-  console.log(`    Packument GET: p50=${fmtMs(r.packumentGet.p50)}, p95=${fmtMs(r.packumentGet.p95)}, min=${fmtMs(r.packumentGet.min)}, max=${fmtMs(r.packumentGet.max)}, n=${r.packumentGet.samples}`);
+  console.log(
+    `    Cold start:    p50=${fmtMs(r.coldStart.p50)}, p95=${fmtMs(r.coldStart.p95)}, min=${fmtMs(r.coldStart.min)}, max=${fmtMs(r.coldStart.max)}, n=${r.coldStart.samples}`,
+  );
+  console.log(
+    `    Publish:       p50=${fmtMs(r.publish.p50)}, p95=${fmtMs(r.publish.p95)}, min=${fmtMs(r.publish.min)}, max=${fmtMs(r.publish.max)}, n=${r.publish.samples}`,
+  );
+  console.log(
+    `    Packument GET: p50=${fmtMs(r.packumentGet.p50)}, p95=${fmtMs(r.packumentGet.p95)}, min=${fmtMs(r.packumentGet.min)}, max=${fmtMs(r.packumentGet.max)}, n=${r.packumentGet.samples}`,
+  );
   console.log(`    Memory idle:   ${fmtMb(r.memoryIdleKb)}`);
   console.log(`    Memory post:   ${fmtMb(r.memoryAfterPublishKb)}`);
 }
@@ -660,7 +693,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
+main().catch(err => {
   console.error('Benchmark failed:', err);
   process.exit(1);
 });

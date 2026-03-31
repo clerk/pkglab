@@ -1,6 +1,7 @@
 import type { WorkspacePackage } from '../types';
-
 import type { PackageFingerprint } from './fingerprint';
+
+import { CommandError } from './errors';
 import { fingerprintPackages } from './fingerprint';
 import { loadFingerprintState, toPackageFingerprints } from './fingerprint-state';
 import {
@@ -14,7 +15,6 @@ import {
 } from './graph';
 import { log } from './log';
 import { getActiveRepos } from './repo-state';
-import { CommandError } from './errors';
 
 export type ChangeReason = 'changed' | 'propagated' | 'unchanged';
 

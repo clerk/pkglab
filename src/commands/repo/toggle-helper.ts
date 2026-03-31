@@ -3,12 +3,7 @@ import type { RepoState } from '../../types';
 import { getPositionalArgs } from '../../lib/args';
 import { CommandError } from '../../lib/errors';
 import { log } from '../../lib/log';
-import {
-  loadOperationalRepos,
-  loadRepoByPath,
-  getRepoDisplayName,
-  canonicalRepoPath,
-} from '../../lib/repo-state';
+import { loadOperationalRepos, loadRepoByPath, getRepoDisplayName, canonicalRepoPath } from '../../lib/repo-state';
 
 interface ToggleOptions {
   verb: string;
@@ -20,10 +15,7 @@ interface ToggleOptions {
   apply: (state: RepoState) => Promise<void>;
 }
 
-export async function runToggle(
-  args: { name?: string; all?: boolean },
-  opts: ToggleOptions,
-) {
+export async function runToggle(args: { name?: string; all?: boolean }, opts: ToggleOptions) {
   const applyAndLog = async (state: RepoState) => {
     await opts.apply(state);
     const displayName = await getRepoDisplayName(state.path);

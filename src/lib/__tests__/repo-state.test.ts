@@ -71,7 +71,7 @@ describe('repoFileName', () => {
   });
 
   test('path with encoded length 51 is truncated to last 50', () => {
-    const path = '/' + 'a' + 'b'.repeat(50);
+    const path = `/a${'b'.repeat(50)}`;
     const result = repoFileName(path);
     const encoded = result.split('--')[1];
     expect(encoded.length).toBe(50);

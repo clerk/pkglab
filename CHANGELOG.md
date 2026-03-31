@@ -34,7 +34,6 @@
 - 02f69d6: Cross-platform PID validation with Linux /proc fallback, exclusive lock for listener startup, user-specific log directory
 - f5303e3: Harden daemon startup race, stop verification, stderr drain, and PID validation
 - aa3cade: Fix correctness, crash safety, and race condition bugs across commands and core libraries
-
   - Fix re-add overwriting original version in repo state (add.ts)
   - Scan peerDependencies and optionalDependencies during version updates (consumer.ts)
   - Fix npmrc marker removal when markers are out of order (consumer.ts)
@@ -141,7 +140,6 @@
 ### Minor Changes
 
 - ff3f9ae: Lockfile safety: prevent localhost registry URLs from leaking into commits
-
   - `pkglab check` now scans staged lockfiles (bun.lock, bun.lockb, pnpm-lock.yaml) for localhost registry URLs
   - `pkglab add` auto-injects `pkglab check` into pre-commit hooks (Husky, raw git), removed on restore
   - `pkglab down` restores all consumer repos before stopping the daemon, use `--force` to skip

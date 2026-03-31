@@ -1,14 +1,9 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { join } from 'node:path';
 import { mkdir, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-import {
-  saveFingerprintState,
-  loadFingerprintState,
-  fingerprintPath,
-  inspectFingerprints,
-} from '../fingerprint-state';
+import { saveFingerprintState, loadFingerprintState, fingerprintPath, inspectFingerprints } from '../fingerprint-state';
 import { atomicWrite } from '../fs';
 import { paths } from '../paths';
 

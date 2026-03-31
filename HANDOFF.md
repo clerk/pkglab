@@ -1,10 +1,12 @@
 Verbunccio, the built-in Bun.serve() registry, has replaced Verdaccio. This handoff is historical.
 
 Read these files for full context:
+
 - docs/plans/2026-02-15-verbunccio-design.md (full design, Codex-reviewed, all decisions finalized)
 - CLAUDE.md (project conventions, commands, structure)
 
 Done:
+
 - Research phase: 3 sonnet agents surveyed all registry alternatives, confirmed no viable replacement exists
 - Design phase: opus agent + Codex 5.3 MCP produced the design doc
 - Codex review: identified critical issues (upstream proxy needed, don't strip non-pkglab versions, audit stubs, server-owned cleanup), all incorporated into design doc
@@ -30,13 +32,14 @@ Split into 3 parallel opus agents:
    - `src/lib/prune.ts`: use HTTP index when available
 
 After implementation:
+
 - Run `bun run test:e2e` to verify all 131 tests pass
 - Codex review via /lcodex
 - Write benchmark script (`benchmarks/registry-benchmark.ts`)
 - Update README.md with Verbunccio/PKGLAB_VERBUNCCIO docs
 
 Verify with:
-  bun run test:e2e
+bun run test:e2e
 
 Env var: PKGLAB_VERBUNCCIO=1 enables the new backend
 

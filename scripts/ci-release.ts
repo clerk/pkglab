@@ -2,6 +2,7 @@
 // and creates a git tag.
 
 import { mkdirSync } from 'node:fs';
+
 import { PLATFORMS } from './platforms';
 
 const ROOT = import.meta.dir + '/..';

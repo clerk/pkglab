@@ -134,7 +134,9 @@ async function executeHook(
     return { status: 'ok', exitCode: 0, durationMs };
   } finally {
     clearTimeout(timer);
-    if (killTimer) clearTimeout(killTimer);
+    if (killTimer) {
+      clearTimeout(killTimer);
+    }
   }
 }
 
@@ -151,7 +153,11 @@ type ErrorInput = HookInput & {
   error: NonNullable<PkglabHookPayload['error']>;
 };
 
-function buildPayload(ctx: HookInput, phase: PkglabHookPayload['phase'], error?: PkglabHookPayload['error']): PkglabHookPayload {
+function buildPayload(
+  ctx: HookInput,
+  phase: PkglabHookPayload['phase'],
+  error?: PkglabHookPayload['error'],
+): PkglabHookPayload {
   return {
     schemaVersion: 1,
     event: ctx.event,
