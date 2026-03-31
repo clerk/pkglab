@@ -2,8 +2,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
-import { handleRequest } from '../verbunccio-routes';
 import type VerbunccioStorage from '../verbunccio-storage';
+
+import { handleRequest } from '../verbunccio-routes';
 
 const UPSTREAM = 'https://registry.npmjs.org';
 const PORT = 16180;

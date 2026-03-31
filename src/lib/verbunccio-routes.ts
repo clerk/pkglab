@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs';
 import { basename } from 'node:path';
 
-import { enqueuePublish, getQueueStatus, type PublishRequest } from './publish-queue';
 import type VerbunccioStorage from './verbunccio-storage';
+
+import { enqueuePublish, getQueueStatus, type PublishRequest } from './publish-queue';
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -330,11 +331,7 @@ async function handleGetTarball(
 }
 
 // Delete an entire package
-async function handleDeletePackage(
-  storage: VerbunccioStorage,
-  pkgName: string,
-  rev: string,
-): Promise<Response> {
+async function handleDeletePackage(storage: VerbunccioStorage, pkgName: string, rev: string): Promise<Response> {
   return storage.withLock(pkgName, async () => {
     const existing = storage.getPackument(pkgName);
     if (!existing) {
@@ -635,11 +632,7 @@ function routePackagePath(
   return jsonResponse(405, { error: 'method_not_allowed' });
 }
 
-export async function handleRequest(
-  req: Request,
-  storage: VerbunccioStorage,
-  port: number,
-): Promise<Response> {
+export async function handleRequest(req: Request, storage: VerbunccioStorage, port: number): Promise<Response> {
   const url = new URL(req.url);
   const pathname = url.pathname;
 
