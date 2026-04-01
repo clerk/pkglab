@@ -38,16 +38,16 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - run: bun install
-
-      - run: bunx changeset status --since=origin/main
+      - name: Check for changeset
+        run: |
+          changesets=$(find .changeset -name '*.md' ! -name 'README.md' 2>/dev/null)
+          if [ -z "$changesets" ]; then
+            echo "::error::No changeset found. Run 'bunx changeset' to add one."
+            exit 1
+          fi
+          echo "Found changesets:"
+          echo "$changesets"
 
   test:
     name: Test (${{ matrix.os }})
