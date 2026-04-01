@@ -33,6 +33,22 @@ jobs:
 
       - run: bun run format:check
 
+  changeset:
+    name: Changeset
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      - run: bunx changeset status --since=origin/main
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
