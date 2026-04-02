@@ -1,5 +1,12 @@
 # pkglab
 
+## 0.17.1
+
+### Patch Changes
+
+- d22d507: Add changeset verification to CI workflow
+- 258bcc7: Buffer and validate upstream packument responses before serving to npm clients, with retry on corrupted JSON. Fixes transient CI failures with large packuments.
+
 ## 0.17.0
 
 ### Minor Changes
@@ -34,6 +41,7 @@
 - 02f69d6: Cross-platform PID validation with Linux /proc fallback, exclusive lock for listener startup, user-specific log directory
 - f5303e3: Harden daemon startup race, stop verification, stderr drain, and PID validation
 - aa3cade: Fix correctness, crash safety, and race condition bugs across commands and core libraries
+
   - Fix re-add overwriting original version in repo state (add.ts)
   - Scan peerDependencies and optionalDependencies during version updates (consumer.ts)
   - Fix npmrc marker removal when markers are out of order (consumer.ts)
