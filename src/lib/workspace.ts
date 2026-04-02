@@ -33,27 +33,6 @@ export function findPackage(packages: WorkspacePackage[], name: string): Workspa
   return packages.find(p => p.name === name);
 }
 
-export async function loadCatalogs(workspaceRoot: string): Promise<Record<string, Record<string, string>>> {
-  const file = Bun.file(join(workspaceRoot, 'pnpm-workspace.yaml'));
-  if (!(await file.exists())) {
-    return {};
-  }
-
-  const { parse } = await import('yaml');
-  const content = parse(await file.text());
-  if (!content?.catalogs || typeof content.catalogs !== 'object') {
-    return {};
-  }
-
-  const result: Record<string, Record<string, string>> = {};
-  for (const [name, entries] of Object.entries(content.catalogs)) {
-    if (entries && typeof entries === 'object') {
-      result[name] = entries as Record<string, string>;
-    }
-  }
-  return result;
-}
-
 /**
  * Discover workspace and collect root + sub-package package.json data.
  * Returns undefined if the path is not a workspace.
