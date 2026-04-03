@@ -1,17 +1,15 @@
 import { join } from 'node:path';
 
-import type { PendingUpdate } from '../types';
+import type { PendingUpdate, VersionEntry } from '../types';
 import type { PackageManager } from './pm-detect';
 
-import { type CatalogFormat, findCatalogRoot, updateCatalogVersion, removeCatalogEntry } from './catalog';
+import { findCatalogRoot, updateCatalogVersion, removeCatalogEntry } from './catalog';
 import { NpmrcConflictError } from './errors';
 import { atomicWrite } from './fs';
 import { patchPnpmLockfile } from './lockfile-patch';
 import { log } from './log';
 import { pmCommand, run } from './proc';
 import { getActiveRepos } from './repo-state';
-
-export type { CatalogFormat } from './catalog';
 
 export const MARKER_START = '# pkglab-start';
 const MARKER_END = '# pkglab-end';
@@ -290,14 +288,6 @@ export async function restorePackage(
   } else {
     log.info(`Removed ${pkgName} (was added by pkglab, no original version)`);
   }
-}
-
-export interface VersionEntry {
-  name: string;
-  version: string;
-  catalogName?: string;
-  catalogFormat?: CatalogFormat;
-  targets: Array<{ dir: string }>;
 }
 
 interface InstallWithVersionUpdatesOpts {

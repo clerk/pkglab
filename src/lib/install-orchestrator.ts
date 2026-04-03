@@ -1,7 +1,6 @@
-import type { PublishPlan, PublishEntry, RepoEntry, RepoState } from '../types';
+import type { PublishPlan, PublishEntry, RepoEntry, RepoState, VersionEntry } from '../types';
 import type { LockfilePatchEntry } from './lockfile-patch';
 import type { PackageManager } from './pm-detect';
-import type { VersionEntry } from './consumer';
 
 import { findCatalogRoot } from './catalog';
 import { installWithVersionUpdates } from './consumer';

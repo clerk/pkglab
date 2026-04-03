@@ -1,8 +1,8 @@
 import { defineCommand } from 'citty';
 import { join, resolve, relative } from 'node:path';
 
-import type { VersionEntry, CatalogFormat } from '../lib/consumer';
-import type { pkglabConfig, RepoState } from '../types';
+import type { CatalogFormat } from '../lib/catalog';
+import type { pkglabConfig, RepoState, VersionEntry } from '../types';
 
 import { getPositionalArgs, normalizeScope } from '../lib/args';
 import { findCatalogRoot, findCatalogEntry, loadCatalogData } from '../lib/catalog';

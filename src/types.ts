@@ -76,6 +76,14 @@ export interface RepoEntry {
   state: RepoState;
 }
 
+export interface VersionEntry {
+  name: string;
+  version: string;
+  catalogName?: string;
+  catalogFormat?: 'package-json' | 'pnpm-workspace';
+  targets: Array<{ dir: string }>;
+}
+
 export interface DaemonInfo {
   pid: number;
   port: number;
