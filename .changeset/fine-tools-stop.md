@@ -1,5 +1,5 @@
 ---
-"pkglab": patch
+'pkglab': patch
 ---
 
 Update contact links
