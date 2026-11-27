@@ -30,7 +30,8 @@ Top-level:
 - `pkglab reset --hard` — wipe all pkglab data and registry storage
 - `pkglab reset --fingerprints` — clear fingerprint cache, forces full republish on next pub
 
-- `pkglab hooks init` — scaffold `.pkglab/hooks/` in the current repo with `payload.d.ts` (typed `PkglabHookPayload` interface) and commented-out stubs for all 7 hook events. Hooks are executable files that run at lifecycle moments: `pre-add`, `post-add`, `pre-restore`, `post-restore`, `pre-update`, `post-update`, `on-error`. Supports `.ts` (bun), `.sh` (bash), and extensionless (direct) formats. Each hook receives a JSON payload as argv[1]. Pre-hooks can abort operations (non-zero exit), post-hooks are advisory, on-error is best-effort. Hook runner module lives at `src/lib/hooks.ts`.
+- `pkglab hooks init` — scaffold `.pkglab/hooks/` in the current repo with `payload.d.ts` (typed `PkglabHookPayload` interface) and commented-out stubs for all 7 hook events. Hooks are executable files that run at lifecycle moments: `pre-add`, `post-add`, `pre-restore`, `post-restore`, `pre-update`, `post-update`, `on-error`. Supports `.ts` (bun), `.sh` (bash), and extensionless (direct) formats. Each hook receives a JSON payload as argv[1]. Pre-hooks can abort operations (non-zero exit), post-hooks are advisory, on-error is best-effort. Hook runner module lives at `src/lib/hooks.ts`. Hooks are trust-on-first-use: they run only if the sha256 of the whole `.pkglab/hooks/` folder matches `~/.pkglab/trusted-hooks.json`; `hooks init` trusts the stubs it writes.
+- `pkglab hooks trust` — trust the current content of `.pkglab/hooks/`. Any edit in the folder makes pkglab skip the hooks with a warning until re-trusted.
 
 Subcommands:
 
@@ -108,6 +109,23 @@ The cascade has three steps: (1) DOWN: pull in transitive deps of targets so `wo
 
 Default output shows a color-coded scope summary (package list with scope/change reasons), then spinners for publishing. Scope reasons show "target", "dependency", or "dependent (via X)" with change status. `--verbose`/`-v` adds the initial scope, expansion steps, and private-package warnings.
 Pruning runs in a detached subprocess via `src/lib/prune.ts`, invoked through the `--__prune` hidden flag in `src/index.ts`.
+
+## Consumer installs
+
+Package manager detection (`src/lib/pm-detect.ts`) walks up from the repo. At each level the `package.json` `packageManager` field wins over lockfiles in the same dir; no field and no lockfile means npm.
+
+Installs run `pm install --ignore-scripts` (`--mode=skip-build` for Yarn 2+, via `ignoreScriptsArgs()`; plus `--prefer-offline` for bun/pnpm). There is no retry with scripts enabled: pkglab never runs install scripts on its own. On failure, package.json/catalog changes roll back. `--no-pm-optimizations` runs a plain `pm install`, which follows the repo's own script settings.
+
+## Registry security
+
+- Writes (any method other than GET/HEAD, except the two npm audit POSTs) require `Authorization: Bearer <token>`. The token is generated once into `~/.pkglab/token` (0600) by `registryToken()` in `src/lib/registry.ts`. All clients (publisher, registry.ts mutations, publish-ping) send it; never hardcode a token.
+- `handleRequest` rejects any Host other than `127.0.0.1:<port>` / `localhost:<port>`.
+- Publish accepts only pkglab versions, exactly one attachment named `<short>-<version>.tgz`, matching `dist.integrity`, no `latest` tag. `/-rev/` PUT only removes versions. `/-/pkglab/publish` requires an absolute `workspaceRoot`, npm-name targets and a plain tag, since they reach the `pkglab pub` argv.
+- Hidden flags (`--__worker`, `--__prune`, `--__listener`) are only honored as `process.argv[2]`.
+- Logs live in `~/.pkglab/logs/`, not tmp.
+- `PKGLAB_HOME` overrides `~/.pkglab`. `bunfig.toml` preloads `test/preload.ts` so `bun test` uses a throwaway home; never let unit tests touch the real one.
+- The `latest` dist-tag is reserved: the registry refuses it and `pub --tag latest` errors.
+- Use `assertNotSymlink()` from `src/lib/fs.ts` before writing repo-controlled files.
 
 ## Version format
 

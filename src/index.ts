@@ -1,7 +1,8 @@
 #!/usr/bin/env bun
 
+// Hidden flags are only honored as the first argument, so they can't be smuggled in as package names.
 // Hidden flag: when the daemon spawns itself as a worker, run the registry server
-if (process.argv.includes('--__worker')) {
+if (process.argv[2] === '--__worker') {
   const { main } = await import('./lib/verbunccio-worker');
   await main();
   // Keep process alive (server is listening)
@@ -9,9 +10,9 @@ if (process.argv.includes('--__worker')) {
 }
 
 // Hidden flag: detached prune subprocess
-if (process.argv.includes('--__prune')) {
+if (process.argv[2] === '--__prune') {
   const { pruneAll } = await import('./lib/prune');
-  const idx = process.argv.indexOf('--__prune');
+  const idx = 2;
   const port = Number(process.argv[idx + 1]);
   const pruneKeep = Number(process.argv[idx + 2]);
   const tag = process.argv[idx + 3];
@@ -20,8 +21,8 @@ if (process.argv.includes('--__prune')) {
 }
 
 // Hidden flag: listener daemon for a workspace
-if (process.argv.includes('--__listener')) {
-  const idx = process.argv.indexOf('--__listener');
+if (process.argv[2] === '--__listener') {
+  const idx = 2;
   const workspaceRoot = process.argv[idx + 1];
   if (!workspaceRoot) {
     console.error('--__listener requires a workspace root path');
