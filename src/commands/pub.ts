@@ -46,14 +46,22 @@ async function resolveTag(args: Record<string, unknown>): Promise<string | undef
     if (branch === 'HEAD') {
       throw new pkglabError('Cannot detect branch name, use --tag instead');
     }
-    return sanitizeTag(branch);
+    return rejectLatest(sanitizeTag(branch));
   }
 
   if (args.tag) {
-    return sanitizeTag(args.tag as string);
+    return rejectLatest(sanitizeTag(args.tag as string));
   }
 
   return undefined;
+}
+
+// The registry refuses the `latest` dist-tag so a local publish can't take over default resolution.
+function rejectLatest(tag: string): string {
+  if (tag === 'latest') {
+    throw new pkglabError('Tag "latest" is reserved, pick another tag');
+  }
+  return tag;
 }
 
 function resolveTargets(args: Record<string, unknown>, workspace: { packages: WorkspacePackage[] }): string[] {

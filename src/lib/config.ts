@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
+import { chmod, mkdir, rename, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { pkglabConfig } from '../types';
@@ -15,7 +15,9 @@ const DEFAULT_CONFIG: pkglabConfig = {
 };
 
 export async function ensurepkglabDirs(): Promise<void> {
-  await mkdir(paths.home, { recursive: true });
+  await mkdir(paths.home, { recursive: true, mode: 0o700 });
+  // mode only applies on creation; tighten dirs made by older versions too
+  await chmod(paths.home, 0o700);
   await mkdir(paths.reposDir, { recursive: true });
   await mkdir(paths.listenersDir, { recursive: true });
   await mkdir(paths.logDir, { recursive: true });

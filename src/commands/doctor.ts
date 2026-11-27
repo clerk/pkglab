@@ -7,6 +7,7 @@ import { loadConfig } from '../lib/config';
 import { MARKER_START, addRegistryToNpmrc } from '../lib/consumer';
 import { getDaemonStatus } from '../lib/daemon';
 import { inspectFingerprints } from '../lib/fingerprint-state';
+import { atomicWrite, isSymlink } from '../lib/fs';
 import { log } from '../lib/log';
 import { paths } from '../lib/paths';
 import { BACKUP_SUFFIX } from '../lib/publisher';
@@ -119,7 +120,7 @@ export default defineCommand({
         }
         const lockPath = join(state.path, 'bun.lock');
         const lockFile = Bun.file(lockPath);
-        if (!(await lockFile.exists())) {
+        if (!(await lockFile.exists()) || (await isSymlink(lockPath))) {
           continue;
         }
         const content = await lockFile.text();
@@ -129,7 +130,7 @@ export default defineCommand({
           continue;
         }
         const sanitized = content.replace(localhostUrlRe, '""');
-        await Bun.write(lockPath, sanitized);
+        await atomicWrite(lockPath, sanitized);
         log.line(
           `  ${c.green('✓')} ${displayName}: sanitized ${matches.length} localhost URL${matches.length !== 1 ? 's' : ''} in bun.lock`,
         );

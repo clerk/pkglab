@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 import { resolve } from 'node:path';
 
+import { trustHooks } from '../../lib/hooks';
 import { log } from '../../lib/log';
 
 const PAYLOAD_DTS = `export interface PkglabHookPayload {
@@ -146,6 +147,8 @@ export default defineCommand({
       Bun.write(resolve(hooksDir, filename), content),
     );
     await Promise.all(writes);
+    // Stubs were written by pkglab just now, so they start out trusted.
+    await trustHooks(process.cwd());
 
     log.success('Created .pkglab/hooks/ with type definitions and hook stubs.');
     log.line('');

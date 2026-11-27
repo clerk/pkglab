@@ -47,6 +47,15 @@ export default defineCommand({
         }
       }
 
+      // The husky hook is tracked; a committed pkglab block would run for every teammate
+      if (staged.includes('.husky/pre-commit')) {
+        const showResult = await run(['git', 'show', ':.husky/pre-commit'], { cwd });
+        if (showResult.stdout.includes('# pkglab-start')) {
+          log.line(`  ${c.red('✗')} Staged .husky/pre-commit contains the pkglab check block`);
+          issues++;
+        }
+      }
+
       // Check all staged package.json files (root and sub-packages)
       const stagedPkgJsons = staged.filter(f => f === 'package.json' || f.endsWith('/package.json'));
       for (const pkgJsonFile of stagedPkgJsons) {

@@ -1,4 +1,5 @@
 import { pkglabError } from './errors';
+import { registryToken } from './registry';
 
 export interface PublishPingMessage {
   workspaceRoot: string;
@@ -22,7 +23,7 @@ export async function sendPublishRequest(port: number, message: PublishPingMessa
   try {
     resp = await fetch(url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${registryToken()}` },
       body: JSON.stringify(message),
       signal: AbortSignal.timeout(5000),
     });

@@ -1,8 +1,11 @@
 import { describe, test, expect } from 'bun:test';
+import { mkdtemp, mkdir, readFile, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import type { CatalogData } from '../consumer';
 
-import { removepkglabBlock, findCatalogEntry, MARKER_START } from '../consumer';
+import { removepkglabBlock, findCatalogEntry, injectPreCommitHook, MARKER_START } from '../consumer';
 
 const MARKER_END = '# pkglab-end';
 
@@ -149,5 +152,37 @@ describe('findCatalogEntry', () => {
 
     const result = findCatalogEntry(data, '@clerk/shared');
     expect(result).toBeNull();
+  });
+});
+
+describe('injectPreCommitHook', () => {
+  test('replaces the old npx block', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'pkglab-hook-'));
+    try {
+      await mkdir(join(repo, '.husky'));
+      const hook = join(repo, '.husky', 'pre-commit');
+      await Bun.write(hook, `#!/bin/sh\nlint\n${MARKER_START}\nnpx pkglab check\n${MARKER_END}\n`);
+      await injectPreCommitHook(repo);
+      const content = await readFile(hook, 'utf8');
+      expect(content).not.toContain('npx');
+      expect(content).toContain('lint');
+      expect(content).toContain('then pkglab check');
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  test('does not write through a symlinked hook', async () => {
+    const repo = await mkdtemp(join(tmpdir(), 'pkglab-hook-'));
+    try {
+      await mkdir(join(repo, '.husky'));
+      const outside = join(repo, 'outside.txt');
+      await Bun.write(outside, 'secret\n');
+      await symlink(outside, join(repo, '.husky', 'pre-commit'));
+      await injectPreCommitHook(repo);
+      expect(await readFile(outside, 'utf8')).toBe('secret\n');
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
   });
 });

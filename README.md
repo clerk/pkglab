@@ -64,7 +64,7 @@ Core workflow
 Performance
 
 - Fast, lightweight registry built on `Bun.serve()` with in-memory metadata: starts in ~60ms, uses ~44MB RAM, publishes 22 packages in <1s
-- Fast consumer installs: lockfile patching for pnpm (skips resolution), `--ignore-scripts` + `--prefer-offline` for bun/pnpm, automatic fallback on failure
+- Fast consumer installs: lockfile patching for pnpm (skips resolution), `--ignore-scripts` + `--prefer-offline` for bun/pnpm, rollback on failure
 - Automatic version pruning per tag so the local registry doesn't grow forever
 - Sync and async APIs (`pub` and `pub --ping`), automatic debounce on rapid build-to-publish loops (common in big monorepos).
 
@@ -153,7 +153,7 @@ This installs a native binary for your platform. No Bun or Node.js runtime requi
 
 Under the hood, the `pkglab` npm package contains a tiny Node.js wrapper. It declares platform-specific packages (`pkglab-darwin-arm64`, `pkglab-linux-x64`, etc.) as optional dependencies with `os` and `cpu` constraints, so npm only downloads the one matching your machine. When you run `pkglab`, the wrapper resolves the platform binary and execs it. The compiled binary has the Bun runtime embedded, so nothing else needs to be installed.
 
-Your consumer repos can use any package manager: npm, pnpm, yarn, or bun.
+Your consumer repos can use any package manager: npm, pnpm, yarn, or bun. pkglab picks it from the nearest `package.json` `packageManager` field (e.g. `"packageManager": "pnpm@10.1.0"`), then from lockfiles, walking up from the repo. No field and no lockfile means npm.
 
 Supported on macOS (ARM64, x64) and Linux (x64, ARM64).
 
@@ -243,7 +243,8 @@ Maintenance
   - `--prune` - remove stale fingerprint files for workspaces that no longer exist on disk
 - `pkglab reset --hard` - wipe all pkglab data and registry storage. Stops the daemon if running.
 - `pkglab reset --fingerprints` - clear the fingerprint cache. Next `pub` will republish all packages regardless of content changes.
-- `pkglab hooks init` - scaffold `.pkglab/hooks/` in the current repo with type definitions (`payload.d.ts`) and commented-out stubs for all 7 hook events. Hooks let consumer repos run custom scripts at lifecycle moments (before/after add, restore, and publish-triggered updates). Each hook receives a typed JSON payload as its first argument. Supports `.ts` (run with bun), `.sh` (run with bash), and extensionless (direct execution) formats. Pre-hooks can abort operations, post-hooks are advisory. See [Repo hooks](#repo-hooks) for details.
+- `pkglab hooks init` - scaffold `.pkglab/hooks/` in the current repo with type definitions (`payload.d.ts`) and commented-out stubs for all 7 hook events. Hooks let consumer repos run custom scripts at lifecycle moments (before/after add, restore, and publish-triggered updates). Each hook receives a typed JSON payload as its first argument. Supports `.ts` (run with bun), `.sh` (run with bash), and extensionless (direct execution) formats. Pre-hooks can abort operations, post-hooks are advisory. The stubs it creates are trusted automatically. See [Repo hooks](#repo-hooks) for details.
+- `pkglab hooks trust` - trust the current content of the repo's `.pkglab/hooks/` folder. pkglab only runs hooks you have trusted, and any edit in the folder must be trusted again.
 
 `pkglab add` automatically injects `pkglab check` into your pre-commit hook (Husky, or raw `.git/hooks/pre-commit`). For Lefthook, add it manually:
 
@@ -252,7 +253,7 @@ Maintenance
 pre-commit:
   commands:
     pkglab-check:
-      run: npx pkglab check
+      run: pkglab check
 ```
 
 ## Multi-worktree support
@@ -386,7 +387,7 @@ When no consumer repos are active (you haven't run `pkglab add` anywhere), the c
 
 Trade-off: adding a previously-skipped package via `pkglab add` gives the last-published version until the next `pkglab pub`.
 
-**Fast consumer installs.** When auto-updating consumer repos, pkglab writes version updates to package.json (or catalog), then runs a single `pm install --ignore-scripts` per repo. If install fails, it retries with scripts enabled, and rolls back package.json changes if that also fails. For pnpm consumers, pkglab patches pnpm-lock.yaml directly (replacing version strings and integrity hashes) and runs `pnpm install --frozen-lockfile` to skip the expensive resolution phase entirely. Falls back to regular install if patching fails. Use `--no-pm-optimizations` to disable all install optimizations and run a plain `pm install` instead.
+**Fast consumer installs.** When auto-updating consumer repos, pkglab writes version updates to package.json (or catalog), then runs a single `pm install --ignore-scripts` per repo. pkglab never runs install scripts on its own: if install fails, it rolls back package.json changes. For pnpm consumers, pkglab patches pnpm-lock.yaml directly (replacing version strings and integrity hashes) and runs `pnpm install --frozen-lockfile` to skip the expensive resolution phase entirely. Falls back to regular install if patching fails. Use `--no-pm-optimizations` to disable all install optimizations and run a plain `pm install` instead.
 
 ## Configuration
 
@@ -395,7 +396,7 @@ Trade-off: adding a previously-skipped package via `pkglab add` gives the last-p
 - `port`: registry port (default: 16180)
 - `prune_keep`: number of old versions to retain per package (default: 3)
 
-Logs are written to `${tmpdir()}/pkglab-${uid}/registry.log` (platform-aware, e.g. `/tmp/pkglab-501/registry.log` on macOS).
+Logs are written to `~/.pkglab/logs/registry.log`.
 
 Set `PKGLAB_NO_MTIME_CACHE=1` to disable the mtime-based fingerprint fast path and always do full content hashing.
 
@@ -416,6 +417,8 @@ This creates `.pkglab/hooks/` with a `payload.d.ts` type definition and commente
 - `on-error` - when any operation fails (for cleanup)
 
 Hooks can be `.ts` (run with bun), `.sh` (run with bash), or extensionless (direct execution). Each hook receives a typed JSON payload as its first argument with package details, registry URL, tag, and event info.
+
+Hooks are trusted on first use: pkglab runs hooks only if the sha256 of the whole `.pkglab/hooks/` folder matches the one recorded by `pkglab hooks trust` (stored in `~/.pkglab/trusted-hooks.json`). Any edit in that folder, including helper files a hook imports, means the hooks are skipped with a warning until you trust them again. Hooks can arrive through `git pull` or a PR checkout, and `pkglab pub` runs hooks in every active consumer repo, so review a hook before trusting it.
 
 Pre-hooks can abort operations by exiting non-zero. For `add`/`restore`, this stops the command. For `pub` auto-updates, it skips that repo and continues with others. Post-hooks are advisory (failures are logged but don't affect the exit code). The `on-error` hook is best-effort and non-recursive.
 
@@ -468,6 +471,16 @@ bun run benchmarks/registry-benchmark.ts
 - `pkglab restore` restores original package versions and cleans up `.npmrc` and pre-commit hooks
 - `pkglab down` restores all consumer repos before stopping the daemon, preventing broken state
 - `pkglab doctor` verifies and repairs `.npmrc` content, detects dirty state, and can sanitize lockfiles with `--lockfile`
+
+Registry security:
+
+- The registry listens on `127.0.0.1` only and rejects requests whose `Host` is not `127.0.0.1:<port>` or `localhost:<port>` (blocks DNS rebinding)
+- Every write (publish, unpublish, dist-tag, `pub --ping`) needs a random per-machine token from `~/.pkglab/token` (mode 0600). Browsers can't attach it cross-site
+- Only `0.0.0-pkglab*` versions can be published, the `latest` dist-tag can't be set, the tarball name is derived from the version, and `dist.integrity` must match the uploaded tarball. A local publish can't shadow a real upstream version
+- `pkglab pub --tag latest` is rejected (`latest` is reserved)
+- pkglab never runs install scripts on its own (`--ignore-scripts`, or `--mode=skip-build` for Yarn 2+), and the injected pre-commit hook runs `pkglab check` only if `pkglab` is on `PATH` (never `npx`, which would fetch from the local registry)
+- Repo hooks need `pkglab hooks trust` before they run
+- pkglab refuses to write through symlinked `.npmrc`, `bunfig.toml`, or pre-commit hook files
 
 ## Acknowledgments
 

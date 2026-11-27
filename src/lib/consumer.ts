@@ -5,10 +5,10 @@ import type { PendingUpdate } from '../types';
 import type { PackageManager } from './pm-detect';
 
 import { NpmrcConflictError } from './errors';
-import { atomicWrite } from './fs';
+import { assertNotSymlink, atomicWrite, escapesRepo, isSymlink } from './fs';
 import { patchPnpmLockfile } from './lockfile-patch';
 import { log } from './log';
-import { detectPackageManager } from './pm-detect';
+import { detectPackageManager, ignoreScriptsArgs } from './pm-detect';
 import { pmCommand, run } from './proc';
 import { getActiveRepos } from './repo-state';
 
@@ -19,6 +19,7 @@ const MARKER_END = '# pkglab-end';
 
 export async function addRegistryToNpmrc(repoPath: string, port: number): Promise<{ isFirstTime: boolean }> {
   const npmrcPath = join(repoPath, '.npmrc');
+  await assertNotSymlink(npmrcPath);
   const file = Bun.file(npmrcPath);
   let content = '';
   let isFirstTime = true;
@@ -48,6 +49,7 @@ export async function addRegistryToNpmrc(repoPath: string, port: number): Promis
 
 export async function removeRegistryFromNpmrc(repoPath: string): Promise<void> {
   const npmrcPath = join(repoPath, '.npmrc');
+  await assertNotSymlink(npmrcPath);
   const file = Bun.file(npmrcPath);
   if (!(await file.exists())) {
     return;
@@ -93,7 +95,15 @@ async function isTrackedByGit(repoPath: string, file: string): Promise<boolean> 
 
 // --- Pre-commit hook injection ---
 
-const HOOK_BLOCK = `${MARKER_START}\nnpx pkglab check\n${MARKER_END}\n`;
+// Never `npx pkglab`: with .npmrc pointing at the local registry, npx would fetch whatever `pkglab` it serves.
+const HOOK_BLOCK = [
+  MARKER_START,
+  'if command -v pkglab >/dev/null 2>&1; then pkglab check',
+  'elif [ -x node_modules/.bin/pkglab ]; then node_modules/.bin/pkglab check',
+  'else echo "pkglab not found, skipping pkglab check" >&2; fi',
+  MARKER_END,
+  '',
+].join('\n');
 
 type HookTarget = { type: 'husky'; path: string } | { type: 'lefthook' } | { type: 'git'; path: string };
 
@@ -126,30 +136,39 @@ async function detectHookTarget(repoPath: string): Promise<HookTarget> {
   return { type: 'git', path: gitHookPath };
 }
 
-export async function injectPreCommitHook(repoPath: string): Promise<void> {
+export async function injectPreCommitHook(repoPath: string, firstTime = true): Promise<void> {
   const target = await detectHookTarget(repoPath);
 
   if (target.type === 'lefthook') {
+    if (!firstTime) {
+      return;
+    }
     log.warn(
       'Lefthook detected. Add pkglab check to your lefthook config manually:\n' +
         '  pre-commit:\n' +
         '    commands:\n' +
         '      pkglab-check:\n' +
-        '        run: npx pkglab check',
+        '        run: pkglab check',
     );
     return;
   }
 
   const hookPath = target.path;
+  if (await escapesRepo(repoPath, hookPath)) {
+    log.warn(`Not injecting pkglab check: ${hookPath} is a symlink or outside the repo`);
+    return;
+  }
   const file = Bun.file(hookPath);
   let content = '';
 
   if (await file.exists()) {
     content = await file.text();
-    if (content.includes(MARKER_START)) {
-      // Already injected
+    if (content.includes(HOOK_BLOCK)) {
+      // Already injected, current version
       return;
     }
+    // Replace an outdated block (e.g. the old `npx pkglab check`)
+    content = removepkglabBlock(content);
   } else {
     // Create the hook file with a shebang
     content = '#!/bin/sh\n';
@@ -175,6 +194,10 @@ export async function removePreCommitHook(repoPath: string): Promise<void> {
   }
 
   const hookPath = target.path;
+  if (await escapesRepo(repoPath, hookPath)) {
+    log.warn(`Not editing ${hookPath}: it is a symlink or outside the repo. Remove the pkglab block manually.`);
+    return;
+  }
   const file = Bun.file(hookPath);
 
   if (!(await file.exists())) {
@@ -320,7 +343,7 @@ const LOCALHOST_URL_RE = /"http:\/\/(?:127\.0\.0\.1|localhost):[^"]*"/g;
 async function sanitizeBunLockfile(dir: string): Promise<void> {
   const lockPath = join(dir, 'bun.lock');
   const lockFile = Bun.file(lockPath);
-  if (!(await lockFile.exists())) {
+  if (!(await lockFile.exists()) || (await isSymlink(lockPath))) {
     return;
   }
   const content = await lockFile.text();
@@ -328,7 +351,7 @@ async function sanitizeBunLockfile(dir: string): Promise<void> {
   if (!LOCALHOST_URL_RE.test(content)) {
     return;
   }
-  await Bun.write(lockPath, content.replace(LOCALHOST_URL_RE, '""'));
+  await atomicWrite(lockPath, content.replace(LOCALHOST_URL_RE, '""'));
 }
 
 /**
@@ -385,12 +408,13 @@ export async function installWithVersionUpdates(
   // pm install syncs node_modules from the updated manifests.
   // --ignore-scripts: pkglab only swaps tarball versions of already-installed
   // packages, so lifecycle scripts (postinstall, prepare) are unnecessary.
-  // If install fails with --ignore-scripts, retry without it as a fallback.
-  const baseArgs = opts.noPmOptimizations ? ['install'] : ['install', '--ignore-scripts'];
+  // No retry with scripts on failure: pkglab never runs install scripts on its own.
+  // Use --no-pm-optimizations for a plain install that follows the repo's script settings.
+  const cwd: string = catalogRoot ?? repoPath;
+  const baseArgs = opts.noPmOptimizations ? ['install'] : ['install', ...(await ignoreScriptsArgs(pm, cwd))];
   if (!opts.noPmOptimizations && (pm === 'pnpm' || pm === 'bun')) {
     baseArgs.push('--prefer-offline');
   }
-  const cwd: string = catalogRoot ?? repoPath;
 
   // Step 3: build a clean env for install.
   // pnpm injects npm_config_* env vars into child processes. npm_config_registry
@@ -418,14 +442,7 @@ export async function installWithVersionUpdates(
     onCommand?.([pm, ...baseArgs], cwd);
 
     // Step 6: run install (fast path with --ignore-scripts unless noPmOptimizations)
-    let result = await run(installCmd, { cwd, env: baseEnv });
-
-    // Step 6b: fallback without --ignore-scripts if the fast path failed
-    if (!opts.noPmOptimizations && result.exitCode !== 0) {
-      const fallbackArgs = baseArgs.filter(a => a !== '--ignore-scripts');
-      const { cmd: fallbackCmd } = pmCommand(pm, fallbackArgs);
-      result = await run(fallbackCmd, { cwd, env: baseEnv });
-    }
+    const result = await run(installCmd, { cwd, env: baseEnv });
 
     // Step 6: rollback on failure
     if (result.exitCode !== 0) {
@@ -679,6 +696,10 @@ const BUNFIG_MARKER = '\n# pkglab-manifest-override\n';
  */
 async function disableBunManifestCache(dir: string): Promise<() => Promise<void>> {
   const path = join(dir, 'bunfig.toml');
+  if (await isSymlink(path)) {
+    log.warn(`Not overriding bun manifest cache: ${path} is a symlink`);
+    return async () => {};
+  }
   const file = Bun.file(path);
   const original = (await file.exists()) ? await file.text() : null;
 

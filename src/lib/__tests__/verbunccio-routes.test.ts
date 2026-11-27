@@ -2,6 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 
 import type VerbunccioStorage from '../verbunccio-storage';
 
+import { registryToken } from '../registry';
 import { handleRequest } from '../verbunccio-routes';
 
 const PORT = 16180;
@@ -183,5 +184,95 @@ describe('proxyToUpstream', () => {
       const sentHeaders = new Headers(calledInit.headers);
       expect(sentHeaders.get('authorization')).toBeNull();
     });
+  });
+});
+
+describe('write protection', () => {
+  const auth = () => ({ authorization: `Bearer ${registryToken()}`, 'content-type': 'application/json' });
+  const publishBody = (version: string, attachment: string) =>
+    JSON.stringify({
+      versions: { [version]: { name: 'left-pad', version } },
+      _attachments: { [attachment]: { data: Buffer.from('tarball').toString('base64') } },
+    });
+
+  test('rejects foreign Host (DNS rebinding)', async () => {
+    const resp = await handleRequest(new Request(`http://evil.example:${PORT}/lodash`), createMockStorage(), PORT);
+    expect(resp.status).toBe(403);
+  });
+
+  test('rejects cross-site text/plain publish-queue POST without token', async () => {
+    const req = new Request(`http://127.0.0.1:${PORT}/-/pkglab/publish`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: JSON.stringify({ workspaceRoot: '/', targets: [], root: true }),
+    });
+    expect((await handleRequest(req, createMockStorage(), PORT)).status).toBe(401);
+  });
+
+  test('rejects publish without token', async () => {
+    const req = new Request(`http://127.0.0.1:${PORT}/left-pad`, {
+      method: 'PUT',
+      body: publishBody('0.0.0-pkglab.1', 'left-pad-0.0.0-pkglab.1.tgz'),
+    });
+    expect((await handleRequest(req, createMockStorage(), PORT)).status).toBe(401);
+  });
+
+  test('rejects non-pkglab versions even with token', async () => {
+    const req = new Request(`http://127.0.0.1:${PORT}/left-pad`, {
+      method: 'PUT',
+      headers: auth(),
+      body: publishBody('1.3.0', 'left-pad-1.3.0.tgz'),
+    });
+    expect((await handleRequest(req, createMockStorage(), PORT)).status).toBe(400);
+  });
+
+  test('rejects attachment named for another version', async () => {
+    const req = new Request(`http://127.0.0.1:${PORT}/left-pad`, {
+      method: 'PUT',
+      headers: auth(),
+      body: publishBody('0.0.0-pkglab.2', 'left-pad-0.0.0-pkglab.1.tgz'),
+    });
+    expect((await handleRequest(req, createMockStorage(), PORT)).status).toBe(400);
+  });
+
+  test('rejects publish-queue targets that look like flags', async () => {
+    const req = new Request(`http://127.0.0.1:${PORT}/-/pkglab/publish`, {
+      method: 'POST',
+      headers: auth(),
+      body: JSON.stringify({ workspaceRoot: '/', targets: ['--__prune'] }),
+    });
+    expect((await handleRequest(req, createMockStorage(), PORT)).status).toBe(400);
+  });
+});
+
+describe('unpublish via -rev', () => {
+  test('accepts an upstream-merged body and only removes pkglab versions', async () => {
+    const existing = {
+      _id: 'left-pad',
+      _rev: '3-verbunccio',
+      name: 'left-pad',
+      'dist-tags': { pkglab: '0.0.0-pkglab.2' },
+      versions: { '0.0.0-pkglab.1': {}, '0.0.0-pkglab.2': {} },
+      time: {},
+    };
+    let saved: any;
+    const storage = {
+      withLock: (_: string, fn: () => unknown) => fn(),
+      getPackument: () => existing,
+      savePackument: (_: string, doc: unknown) => {
+        saved = doc;
+      },
+      deleteTarball: () => {},
+    } as unknown as VerbunccioStorage;
+    // Body as unpublishVersions builds it from GET: upstream versions merged in, oldest pkglab version removed
+    const body = { ...existing, versions: { '1.3.0': {}, '0.0.0-pkglab.2': {} } };
+    const req = new Request(`http://127.0.0.1:${PORT}/left-pad/-rev/3-verbunccio`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${registryToken()}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const resp = await handleRequest(req, storage, PORT);
+    expect(resp.status).toBe(201);
+    expect(Object.keys(saved.versions)).toEqual(['0.0.0-pkglab.2']);
   });
 });

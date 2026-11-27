@@ -110,7 +110,7 @@ export function getListenerLockPath(workspaceRoot: string): string {
 
 export function getListenerLogPath(workspaceRoot: string): string {
   const hash = new Bun.CryptoHasher('sha256').update(workspaceRoot).digest('hex').slice(0, 12);
-  return join('/tmp/pkglab', `listener-${hash}.log`);
+  return join(paths.logDir, `listener-${hash}.log`);
 }
 
 /**

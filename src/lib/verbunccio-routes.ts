@@ -1,9 +1,17 @@
 import { existsSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 
 import type VerbunccioStorage from './verbunccio-storage';
 
 import { enqueuePublish, getQueueStatus, type PublishRequest } from './publish-queue';
+import { registryToken } from './registry';
+import { ispkglabVersion } from './version';
+
+// npm package name (optionally scoped). Also rejects leading '-' so names can't be read as CLI flags.
+const PACKAGE_NAME_RE = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/i;
+const TAG_RE = /^(?!latest$)[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/;
+// Unauthenticated POSTs that package managers send during install; both return {}.
+const OPEN_POST_PATHS = new Set(['/-/npm/v1/security/advisories/bulk', '/-/npm/v1/security/audits/quick']);
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -105,11 +113,30 @@ async function handlePublish(
   }
   const newVersionKey = versionKeys[0];
   const newVersionData = incomingVersions[newVersionKey];
+  // Only pkglab versions, so a local publish can never shadow a real upstream version.
+  if (!ispkglabVersion(newVersionKey)) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'only 0.0.0-pkglab versions can be published' });
+  }
 
+  const incomingTags = (body['dist-tags'] ?? {}) as Record<string, string>;
+  if (Object.entries(incomingTags).some(([t, v]) => t === 'latest' || v !== newVersionKey)) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'invalid dist-tags' });
+  }
+
+  const tarballFilename = `${pkgName.split('/').pop()}-${newVersionKey}.tgz`;
   const attachments = (body._attachments ?? {}) as Record<string, any>;
   const attachmentKeys = Object.keys(attachments);
-  if (attachmentKeys.length === 0) {
-    return jsonResponse(400, { error: 'bad_request', reason: 'missing attachment' });
+  if (attachmentKeys.length !== 1 || basename(attachmentKeys[0]) !== tarballFilename) {
+    return jsonResponse(400, { error: 'bad_request', reason: `expected one attachment named ${tarballFilename}` });
+  }
+  const tarball = Buffer.from(String(attachments[attachmentKeys[0]]?.data ?? ''), 'base64');
+  if (tarball.length === 0) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'empty attachment data' });
+  }
+  const integrity = `sha512-${new Bun.CryptoHasher('sha512').update(tarball).digest('base64')}`;
+  const claimed = newVersionData?.dist?.integrity;
+  if (claimed !== undefined && claimed !== integrity) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'dist.integrity does not match attachment' });
   }
 
   // Lock around the entire read-check-save-mutate-write sequence
@@ -121,23 +148,9 @@ async function handlePublish(
       return jsonResponse(409, { error: 'conflict', reason: 'version already exists' });
     }
 
-    // Save tarballs from attachments (inside lock, after duplicate check)
-    const savedTarballs: string[] = [];
-    for (const [attachmentName, meta] of Object.entries(attachments)) {
-      // npm sends scoped attachment names like "@scope/pkg-1.0.0.tgz",
-      // extract the basename for safe disk storage
-      const safeFilename = basename(attachmentName);
-      if (!safeFilename || safeFilename.includes('..') || safeFilename.includes('\0')) {
-        return jsonResponse(400, { error: 'bad_request', reason: 'invalid attachment filename' });
-      }
-      const base64Data = (meta as Record<string, any>).data as string;
-      const buffer = Buffer.from(base64Data, 'base64');
-      if (buffer.length === 0) {
-        return jsonResponse(400, { error: 'bad_request', reason: 'empty attachment data' });
-      }
-      await storage.saveTarball(pkgName, safeFilename, buffer);
-      savedTarballs.push(safeFilename);
-    }
+    // Save the tarball (inside lock, after duplicate check). Name is derived from the version, not the client.
+    await storage.saveTarball(pkgName, tarballFilename, tarball);
+    const savedTarballs = [tarballFilename];
 
     const doc = existing
       ? { ...existing }
@@ -153,18 +166,15 @@ async function handlePublish(
     // Add new version
     doc.versions = { ...doc.versions };
 
-    // Rewrite dist.tarball URL to canonical form
-    if (newVersionData.dist) {
-      const tarballFilename = `${pkgName.split('/').pop()}-${newVersionKey}.tgz`;
-      newVersionData.dist = {
-        ...newVersionData.dist,
-        tarball: `http://127.0.0.1:${port}/${pkgName}/-/${tarballFilename}`,
-      };
-    }
+    // Rewrite dist.tarball URL to canonical form and pin integrity to the stored bytes
+    newVersionData.dist = {
+      ...newVersionData.dist,
+      integrity,
+      tarball: `http://127.0.0.1:${port}/${pkgName}/-/${tarballFilename}`,
+    };
     doc.versions[newVersionKey] = newVersionData;
 
     // Merge dist-tags
-    const incomingTags = (body['dist-tags'] ?? {}) as Record<string, string>;
     doc['dist-tags'] = { ...doc['dist-tags'], ...incomingTags };
 
     // Add time entry
@@ -351,13 +361,14 @@ async function handleDeletePackage(storage: VerbunccioStorage, pkgName: string, 
   });
 }
 
-// Update a packument (used by npm unpublish for individual versions)
+// Update a packument (used by npm unpublish for individual versions).
+// Only version removal is honored; everything else in the body is ignored.
+// The body usually comes from GET, which merges upstream versions in, so only pkglab versions are compared.
 async function handleUpdatePackument(
   req: Request,
   storage: VerbunccioStorage,
   pkgName: string,
   rev: string,
-  port: number,
 ): Promise<Response> {
   return storage.withLock(pkgName, async () => {
     const existing = storage.getPackument(pkgName);
@@ -375,33 +386,31 @@ async function handleUpdatePackument(
       return jsonResponse(400, { error: 'bad_request', reason: 'invalid JSON body' });
     }
 
-    // Determine removed versions
-    const oldVersions = new Set(Object.keys(existing.versions));
-    const newVersions = new Set(Object.keys(newDoc.versions ?? {}));
-    const removedVersions: string[] = [];
-    for (const v of oldVersions) {
-      if (!newVersions.has(v)) {
-        removedVersions.push(v);
+    const newVersions = new Set(Object.keys(newDoc.versions ?? {}).filter(ispkglabVersion));
+    if ([...newVersions].some(v => existing.versions[v] === undefined)) {
+      return jsonResponse(400, { error: 'bad_request', reason: 'only version removal is supported' });
+    }
+    const removedVersions = Object.keys(existing.versions).filter(v => !newVersions.has(v));
+
+    const doc = {
+      ...existing,
+      versions: { ...existing.versions },
+      time: { ...existing.time },
+      'dist-tags': { ...existing['dist-tags'] },
+    };
+    for (const v of removedVersions) {
+      delete doc.versions[v];
+      delete doc.time[v];
+    }
+    for (const [tag, v] of Object.entries(doc['dist-tags'])) {
+      if (doc.versions[v] === undefined) {
+        delete doc['dist-tags'][tag];
       }
     }
-
-    // Bump revision
     const newRev = bumpRev(existing._rev);
-    newDoc._rev = newRev;
+    doc._rev = newRev;
 
-    // Rewrite all dist.tarball URLs to canonical form
-    for (const [version, versionData] of Object.entries(newDoc.versions ?? {})) {
-      const vData = versionData as Record<string, any>;
-      if (vData.dist) {
-        const tarballFilename = `${pkgName.split('/').pop()}-${version}.tgz`;
-        vData.dist = {
-          ...vData.dist,
-          tarball: `http://127.0.0.1:${port}/${pkgName}/-/${tarballFilename}`,
-        };
-      }
-    }
-
-    await storage.savePackument(pkgName, newDoc as any);
+    await storage.savePackument(pkgName, doc);
 
     // Delete orphaned tarballs for removed versions
     for (const version of removedVersions) {
@@ -437,6 +446,9 @@ async function handleSetDistTag(
     if (existing.versions[version] === undefined) {
       return jsonResponse(404, { error: 'not_found', reason: 'version not found' });
     }
+    if (tag === 'latest') {
+      return jsonResponse(400, { error: 'bad_request', reason: 'cannot set the latest dist-tag' });
+    }
 
     const doc = { ...existing };
     doc['dist-tags'] = { ...doc['dist-tags'] };
@@ -465,19 +477,23 @@ async function handlePublishQueue(req: Request): Promise<Response> {
     return jsonResponse(400, { error: 'bad_request', reason: 'workspaceRoot is required' });
   }
 
-  if (!existsSync(workspaceRoot)) {
-    return jsonResponse(400, { error: 'bad_request', reason: 'workspaceRoot directory does not exist' });
+  if (!isAbsolute(workspaceRoot) || !existsSync(workspaceRoot)) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'workspaceRoot must be an existing absolute path' });
   }
 
+  // Targets and tag end up in the `pkglab pub` argv, so only allow package names / tag characters.
   const targets = body.targets;
-  if (!Array.isArray(targets) || !targets.every(t => typeof t === 'string')) {
-    return jsonResponse(400, { error: 'bad_request', reason: 'targets must be an array of strings' });
+  if (!Array.isArray(targets) || !targets.every(t => typeof t === 'string' && PACKAGE_NAME_RE.test(t))) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'targets must be an array of package names' });
+  }
+  if (body.tag !== undefined && (typeof body.tag !== 'string' || !TAG_RE.test(body.tag))) {
+    return jsonResponse(400, { error: 'bad_request', reason: 'invalid tag' });
   }
 
   const req_: PublishRequest = {
     workspaceRoot,
     targets: targets,
-    tag: typeof body.tag === 'string' ? body.tag : undefined,
+    tag: body.tag,
     force: body.force === true,
     shallow: body.shallow === true,
     single: body.single === true,
@@ -590,7 +606,7 @@ function routePackagePath(
       return handleDeletePackage(storage, pkgName, rev);
     }
     if (method === 'PUT') {
-      return handleUpdatePackument(req, storage, pkgName, rev, port);
+      return handleUpdatePackument(req, storage, pkgName, rev);
     }
     return jsonResponse(405, { error: 'method_not_allowed' });
   }
@@ -641,6 +657,17 @@ function routePackagePath(
 export async function handleRequest(req: Request, storage: VerbunccioStorage, port: number): Promise<Response> {
   const url = new URL(req.url);
   const pathname = url.pathname;
+
+  // Bun builds req.url from the Host header. Rejecting foreign hosts blocks DNS rebinding.
+  if (url.host !== `127.0.0.1:${port}` && url.host !== `localhost:${port}`) {
+    return jsonResponse(403, { error: 'forbidden', reason: 'invalid host' });
+  }
+
+  // Every write needs the per-machine token. Browsers can't attach it cross-site.
+  const isRead = req.method === 'GET' || req.method === 'HEAD';
+  if (!isRead && !OPEN_POST_PATHS.has(pathname) && req.headers.get('authorization') !== `Bearer ${registryToken()}`) {
+    return jsonResponse(401, { error: 'unauthorized' });
+  }
 
   // System paths
   if (pathname.startsWith('/-/')) {

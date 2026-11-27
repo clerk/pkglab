@@ -5,7 +5,7 @@ import type { PublishPlan, PublishEntry, WorkspacePackage, pkglabConfig } from '
 
 import { log } from './log';
 import { bunEnv, run } from './proc';
-import { registryUrl } from './registry';
+import { registryToken, registryUrl } from './registry';
 import { extractTag } from './version';
 
 export function buildPublishPlan(
@@ -170,7 +170,7 @@ async function publishSinglePackage(
     // BUN_BE_BUN=1 makes the compiled binary act as the plain bun CLI,
     // so process.execPath runs `bun publish` instead of `pkglab publish`.
     // NPM_CONFIG_TOKEN provides auth for the local registry.
-    const env = bunEnv({ NPM_CONFIG_TOKEN: 'pkglab-local' });
+    const env = bunEnv({ NPM_CONFIG_TOKEN: registryToken() });
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const result = await run(cmd, { cwd: entry.dir, env });

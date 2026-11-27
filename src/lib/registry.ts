@@ -1,7 +1,46 @@
+import { randomBytes } from 'node:crypto';
+import { linkSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+
 import type { pkglabConfig } from '../types';
+
+import { paths } from './paths';
 
 export function registryUrl(config: pkglabConfig): string {
   return `http://127.0.0.1:${config.port}`;
+}
+
+let cachedToken: string | undefined;
+
+/**
+ * Per-machine secret the registry requires on every write. Created once in ~/.pkglab/token (0600).
+ * Written to a temp file and hard-linked into place so concurrent readers never see a partial token.
+ */
+export function registryToken(): string {
+  if (cachedToken) {
+    return cachedToken;
+  }
+  mkdirSync(paths.home, { recursive: true, mode: 0o700 });
+  const tmp = `${paths.token}.${process.pid}.tmp`;
+  writeFileSync(tmp, randomBytes(32).toString('hex'), { mode: 0o600 });
+  try {
+    linkSync(tmp, paths.token);
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw err;
+    }
+  } finally {
+    unlinkSync(tmp);
+  }
+  const token = readFileSync(paths.token, 'utf8').trim();
+  if (token.length < 32) {
+    throw new Error(`Invalid registry token in ${paths.token}. Delete it and restart: pkglab down && pkglab up`);
+  }
+  cachedToken = token;
+  return cachedToken;
+}
+
+function authHeader(): string {
+  return `Bearer ${registryToken()}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +98,7 @@ export async function setDistTag(config: pkglabConfig, name: string, version: st
   const resp = await fetch(url, {
     method: 'PUT',
     headers: {
-      Authorization: 'Bearer pkglab-local',
+      Authorization: authHeader(),
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(version),
@@ -81,7 +120,7 @@ export async function unpublishVersions(
 
   const url = registryUrl(config);
   const pkgUrl = `${url}/${encodeURIComponent(name)}`;
-  const headers = { Authorization: 'Bearer pkglab-local' };
+  const headers = { Authorization: authHeader() };
 
   const resp = await fetch(pkgUrl, { headers });
   if (!resp.ok) {
@@ -178,7 +217,7 @@ export async function unpublishVersions(
 export async function removePackage(config: pkglabConfig, name: string): Promise<boolean> {
   const url = registryUrl(config);
   const pkgUrl = `${url}/${encodeURIComponent(name)}`;
-  const headers = { Authorization: 'Bearer pkglab-local' };
+  const headers = { Authorization: authHeader() };
 
   // Get the revision needed for DELETE
   const resp = await fetch(pkgUrl, { headers });

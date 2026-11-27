@@ -20,7 +20,7 @@ import { ensureDaemonRunning } from '../lib/daemon';
 import { CommandError, SilentExitError } from '../lib/errors';
 import { runPreHook, runPostHook, runErrorHook } from '../lib/hooks';
 import { log } from '../lib/log';
-import { detectPackageManager } from '../lib/pm-detect';
+import { detectPackageManager, ignoreScriptsArgs } from '../lib/pm-detect';
 import { getDistTags, listPackageNames } from '../lib/registry';
 import { canonicalRepoPath, loadRepoByPath, saveRepoByPath } from '../lib/repo-state';
 import { prefetchUpdateCheck } from '../lib/update-check';
@@ -193,8 +193,9 @@ async function batchInstallPackages(
     log.dim('  Would update .npmrc with local registry entries');
   } else {
     const { isFirstTime } = await addRegistryToNpmrc(effectivePath, config.port);
+    // Every add, not just the first: also upgrades an outdated block (e.g. the old `npx pkglab check`).
+    await injectPreCommitHook(effectivePath, isFirstTime);
     if (isFirstTime) {
-      await injectPreCommitHook(effectivePath);
       log.info(NPMRC_NOTICE);
     }
   }
@@ -284,7 +285,7 @@ async function batchInstallPackages(
     }
     log.line('');
     const pm = await detectPackageManager(effectivePath);
-    const dryCmd = [pm, 'install', '--ignore-scripts'];
+    const dryCmd = [pm, 'install', ...(await ignoreScriptsArgs(pm, effectivePath))];
     if (pm === 'pnpm' || pm === 'bun') {
       dryCmd.push('--prefer-offline');
     }
